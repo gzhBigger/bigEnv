@@ -28,6 +28,18 @@ interface Toast {
   id: number;
 }
 
+/** IPC 抛出的错误会带上 `Error invoking remote method 'x': Error: ` 前缀，展示前剥掉。 */
+function errorText(error: unknown): string {
+  const raw = error instanceof Error ? error.message : String(error);
+  return raw.replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
+}
+
+/** 注册表写入通常只要几百毫秒，但足够快时用户看不到"正在写入"；保底展示一段时间。 */
+async function keepPending(startedAt: number, minMs = 520): Promise<void> {
+  const remaining = minMs - (Date.now() - startedAt);
+  if (remaining > 0) await new Promise((resolve) => setTimeout(resolve, remaining));
+}
+
 interface AppState {
   page: PageKey;
   settings: Settings | null;
@@ -46,6 +58,11 @@ interface AppState {
   toast: Toast | null;
   busy: string | null;
   dockVisible: boolean;
+  /** 正在提交的 PATH 模式，用于在按钮上显示进行中状态。 */
+  pathModePending: PathMode | null;
+  /** 正在提交的 SDK 勾选集合，用于让复选框先乐观切换再显示写入结果。 */
+  pathSdksPending: string[] | null;
+  pathError: string | null;
 
   init(): Promise<void>;
   setPage(page: PageKey): void;
@@ -93,6 +110,9 @@ export const useApp = create<AppState>((set, get) => ({
   toast: null,
   busy: null,
   dockVisible: false,
+  pathModePending: null,
+  pathSdksPending: null,
+  pathError: null,
 
   async init() {
     bridge.events.onJob((job) => {
@@ -352,7 +372,8 @@ export const useApp = create<AppState>((set, get) => ({
   },
 
   async setPathMode(mode) {
-    set({ busy: 'path' });
+    const startedAt = Date.now();
+    set({ busy: 'path', pathModePending: mode, pathError: null });
     try {
       const shell = await bridge.env.setPathMode(mode);
       set({ shell });
@@ -364,22 +385,35 @@ export const useApp = create<AppState>((set, get) => ({
           : `已写入${mode === 'machine' ? '系统' : '用户'} PATH（新开的终端生效）`,
       );
     } catch (error) {
-      get().notify(`写入 PATH 失败：${(error as Error).message}`, 'err');
+      const message = errorText(error);
+      set({ pathError: message });
+      get().notify(`写入 PATH 失败：${message}`, 'err');
     } finally {
-      set({ busy: null });
+      await keepPending(startedAt);
+      set({ busy: null, pathModePending: null });
     }
   },
 
   async setPathSdks(sdks) {
-    set({ busy: 'path-sdks' });
+    const startedAt = Date.now();
+    const mode = get().settings?.pathMode ?? 'off';
+    set({ busy: 'path-sdks', pathSdksPending: sdks, pathError: null });
     try {
       const shell = await bridge.env.setPathSdks(sdks);
       set({ shell });
       set({ settings: await bridge.settings.get() });
+      get().notify(
+        mode === 'off'
+          ? `已保存启用清单（${sdks.length} 个 SDK）；当前未启用全局 PATH，不会写入注册表`
+          : `已写入${mode === 'machine' ? '系统' : '用户'} PATH：${shell.globalEntries.length} 个目录`,
+      );
     } catch (error) {
-      get().notify(`更新 PATH 条目失败：${(error as Error).message}`, 'err');
+      const message = errorText(error);
+      set({ pathError: message });
+      get().notify(`更新 PATH 条目失败：${message}`, 'err');
     } finally {
-      set({ busy: null });
+      await keepPending(startedAt);
+      set({ busy: null, pathSdksPending: null });
     }
   },
 

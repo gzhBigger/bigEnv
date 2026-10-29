@@ -927,6 +927,9 @@ code,
   border-radius: 7px;
   cursor: pointer;
   font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
 }
 
 .tabbar button.on {
@@ -1107,6 +1110,14 @@ code,
 .env-row.on {
   border-color: rgba(76, 154, 255, 0.35);
   background: rgba(76, 154, 255, 0.08);
+}
+
+.env-row.pending {
+  opacity: 0.72;
+}
+
+.env-row input[type='checkbox']:disabled {
+  cursor: progress;
 }
 
 .env-row-name {

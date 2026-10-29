@@ -1,6 +1,6 @@
 import type { JSX } from 'react';
-import { useMemo } from 'react';
-import { AlertTriangle, Globe2 } from 'lucide-react';
+import { useMemo, useRef } from 'react';
+import { AlertTriangle, Loader2, RotateCw, TerminalSquare } from 'lucide-react';
 import type { PathMode } from '../../shared/types';
 import { bridge } from '../lib/bridge';
 import { useApp } from '../store';
@@ -20,8 +20,27 @@ export function GlobalEnv(): JSX.Element {
   const busy = useApp((state) => state.busy);
   const setPathMode = useApp((state) => state.setPathMode);
   const setPathSdks = useApp((state) => state.setPathSdks);
+  const pathModePending = useApp((state) => state.pathModePending);
+  const pathSdksPending = useApp((state) => state.pathSdksPending);
+  const pathError = useApp((state) => state.pathError);
 
   const selected = useMemo(() => new Set(shell?.pathSdks ?? []), [shell?.pathSdks]);
+  const pending = useMemo(() => new Set(pathSdksPending ?? []), [pathSdksPending]);
+  const writingSdks = pathSdksPending !== null;
+  const writingMode = pathModePending !== null;
+  const writing = writingSdks || writingMode || busy === 'path' || busy === 'path-sdks';
+  const mode = shell?.pathMode ?? 'off';
+  const lastAction = useRef<(() => void) | null>(null);
+
+  const applyMode = (next: PathMode): void => {
+    lastAction.current = () => void setPathMode(next);
+    void setPathMode(next);
+  };
+
+  const applySdks = (next: string[]): void => {
+    lastAction.current = () => void setPathSdks(next);
+    void setPathSdks(next);
+  };
 
   // One row per SDK that has an active version; the entry we would publish is `<installRoot>/<sdk>/current`.
   const rows = useMemo(() => {
@@ -53,7 +72,7 @@ export function GlobalEnv(): JSX.Element {
     const next = new Set(selected);
     if (on) next.add(sdk);
     else next.delete(sdk);
-    void setPathSdks([...next]);
+    applySdks([...next]);
   };
 
   return (
@@ -62,13 +81,13 @@ export function GlobalEnv(): JSX.Element {
         <div>
           <h1>全局环境</h1>
           <p>
-            这里决定「哪些运行时对所有程序可见」。只有勾选的 SDK 会把自己的{' '}
+            这里决定「哪些运行时对所有程序可见」。只有点「启用」的 SDK 会把自己的{' '}
             <code>&lt;安装目录&gt;\&lt;sdk&gt;\current</code> 写进 PATH；切版本只换 junction 目标，已打开的终端下一条命令就生效。
           </p>
         </div>
         <div className="actions">
           <button type="button" className="btn" onClick={() => void bridge.env.openTerminal()}>
-            <Globe2 size={14} /> 验证一下
+            <TerminalSquare size={14} /> 打开终端验证
           </button>
         </div>
       </div>
@@ -90,24 +109,64 @@ export function GlobalEnv(): JSX.Element {
             关闭时会移除 bigEnv 写入的所有条目，不动其它内容。
           </div>
           <div className="tabbar">
-            {PATH_MODES.map((mode) => (
+            {PATH_MODES.map((modeItem) => (
               <button
-                key={mode.id}
+                key={modeItem.id}
                 type="button"
-                className={shell?.pathMode === mode.id ? 'active' : ''}
-                disabled={busy === 'path'}
-                onClick={() => void setPathMode(mode.id)}
+                className={shell?.pathMode === modeItem.id ? 'active' : ''}
+                disabled={writing}
+                onClick={() => applyMode(modeItem.id)}
               >
-                {mode.label}
+                {pathModePending === modeItem.id && <Loader2 size={12} className="spin" />}
+                {modeItem.label}
               </button>
             ))}
           </div>
         </div>
+        {writingMode && (
+          <>
+            <div className="divider" />
+            <div className="row" style={{ fontSize: 12, color: 'var(--muted)' }}>
+              <Loader2 size={13} className="spin" />
+              <span>
+                正在{mode === 'off' || pathModePending === 'off' ? '移除' : '写入'}注册表 PATH，请稍候…
+              </span>
+            </div>
+          </>
+        )}
+        {pathError && (
+          <>
+            <div className="divider" />
+            <div className="row" style={{ fontSize: 12, color: 'var(--danger)' }}>
+              <AlertTriangle size={13} />
+              <span style={{ flex: 1 }}>PATH 写入失败：{pathError}</span>
+              <button
+                type="button"
+                className="btn sm"
+                disabled={writing}
+                onClick={() => lastAction.current?.()}
+              >
+                <RotateCw size={12} /> 重试
+              </button>
+            </div>
+          </>
+        )}
         {shell?.pathMode === 'off' && (
           <>
             <div className="divider" />
-            <div className="hint">
-              当前没有把任何运行时写进全局 PATH。勾选结果会保存在设置里，重新开启「用户 PATH / 系统 PATH」后立即按勾选项写入。
+            <div className="spread" style={{ gap: 12 }}>
+              <div className="hint">
+                当前没有把任何运行时写进全局 PATH。你在这里的启用结果会保存下来，重新开启「用户 PATH / 系统 PATH」后立即按结果写入。
+              </div>
+              <button
+                type="button"
+                className="btn sm primary"
+                disabled={writing}
+                onClick={() => applyMode('user')}
+              >
+                {pathModePending === 'user' ? <Loader2 size={12} className="spin" /> : null}
+                立即写入用户 PATH
+              </button>
             </div>
           </>
         )}
@@ -117,17 +176,43 @@ export function GlobalEnv(): JSX.Element {
         <div className="card-head">
           <h2>参与全局 PATH 的 SDK</h2>
           <span className="meta">
-            {selected.size} 个已选 · 共 {rows.length} 个可发布
+            {writingSdks ? (
+              <span className="row" style={{ gap: 6 }}>
+                <Loader2 size={12} className="spin" /> 正在写入 {pending.size} 个 SDK…
+              </span>
+            ) : (
+              `${selected.size} 个已启用 · 共 ${rows.length} 个可发布`
+            )}
           </span>
         </div>
         {rows.length === 0 && <div className="empty">还没有安装任何运行时。</div>}
+        {rows.length > 1 && (
+          <div className="spread" style={{ marginTop: 10 }}>
+            <span className="hint">启用后写入的是 <code>&lt;安装目录&gt;\&lt;sdk&gt;\current</code>，切版本不用改 PATH。</span>
+            <button
+              type="button"
+              className="btn sm"
+              disabled={writing}
+              onClick={() => applySdks(rows.every((row) => selected.has(row.sdk)) ? [] : rows.map((row) => row.sdk))}
+            >
+              {rows.every((row) => selected.has(row.sdk)) ? '全部停用' : '全部启用'}
+            </button>
+          </div>
+        )}
         {rows.length > 0 && (
           <div className="env-table">
             {rows.map((row) => {
-              const checked = selected.has(row.sdk);
+              const checked = writingSdks ? pending.has(row.sdk) : selected.has(row.sdk);
+              const rowPending = writingSdks && pending.has(row.sdk) !== selected.has(row.sdk);
+              const status = rowPending
+                ? { cls: 'amber', text: '写入中' }
+                : checked
+                  ? mode === 'off'
+                    ? { cls: '', text: '仅记录' }
+                    : { cls: 'green', text: '已发布' }
+                  : { cls: '', text: '未发布' };
               return (
-                <div key={row.sdk} className={`env-row${checked ? ' on' : ''}`}>
-                  <input type="checkbox" checked={checked} onChange={(event) => toggle(row.sdk, event.target.checked)} />
+                <div key={row.sdk} className={`env-row${checked ? ' on' : ''}${rowPending ? ' pending' : ''}`}>
                   <span className="sdk-glyph sm">{glyphOf(row.name, row.sdk)}</span>
                   <div className="env-row-name">
                     <strong>{row.name}</strong>
@@ -135,6 +220,19 @@ export function GlobalEnv(): JSX.Element {
                   </div>
                   {row.current && <span className="tag blue">{row.current}</span>}
                   {!row.current && <span className="tag amber">未激活</span>}
+                  <span className={`tag ${status.cls}`}>
+                    {rowPending && <Loader2 size={11} className="spin" />}
+                    {status.text}
+                  </span>
+                  <button
+                    type="button"
+                    className={`btn sm${checked ? '' : ' primary'}`}
+                    disabled={writing}
+                    aria-label={`${checked ? '停用' : '启用'} ${row.name}`}
+                    onClick={() => toggle(row.sdk, !checked)}
+                  >
+                    {checked ? '停用' : '启用'}
+                  </button>
                 </div>
               );
             })}
@@ -144,12 +242,29 @@ export function GlobalEnv(): JSX.Element {
           <>
             <div className="divider" />
             {phantom.map((sdk) => (
-              <div key={sdk} className="env-row">
-                <input type="checkbox" checked onChange={() => toggle(sdk, false)} />
+              <div key={sdk} className="env-row pending">
                 <div className="env-row-name">
                   <strong>{sdk}</strong>
-                  <span className="muted">已不在本机安装，取消勾选即可从 PATH 移除</span>
+                  <span className="muted">
+                    {writingSdks && pending.has(sdk)
+                      ? '正在从 PATH 移除…'
+                      : '已不在本机安装，点「移除」即可从 PATH 清掉'}
+                  </span>
                 </div>
+                {writingSdks && pending.has(sdk) && (
+                  <span className="tag amber">
+                    <Loader2 size={11} className="spin" /> 移除中
+                  </span>
+                )}
+                <button
+                  type="button"
+                  className="btn sm danger"
+                  disabled={writing}
+                  aria-label={`从 PATH 移除 ${sdk}`}
+                  onClick={() => toggle(sdk, false)}
+                >
+                  移除
+                </button>
               </div>
             ))}
           </>

@@ -1,3 +1,4 @@
+import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { createLogger } from './logger';
 import { runCommand } from './util';
@@ -78,12 +79,25 @@ export async function readPathValue(scope: PathScope): Promise<string> {
 /**
  * Broadcasts WM_SETTINGCHANGE so Explorer and newly started shells pick the value up.
  * Re-setting the same value through .NET is enough and avoids passing the long PATH on a command line.
+ *
+ * This is best-effort and deliberately not awaited: PowerShell takes seconds to cold start, and the
+ * registry value is already updated. Newly launched shells read the registry on their own, so a slow
+ * broadcast must not block the UI's "written" state.
  */
-async function broadcast(scope: PathScope): Promise<void> {
+function broadcast(scope: PathScope): void {
   const target = scope === 'machine' ? 'Machine' : 'User';
   const script = `$v=[Environment]::GetEnvironmentVariable('Path','${target}'); if ($null -ne $v) { [Environment]::SetEnvironmentVariable('Path',$v,'${target}') }`;
-  const result = await runCommand('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { timeoutMs: 15000 });
-  if (result.code !== 0) log.warn('environment broadcast failed', { scope, stderr: result.stderr.slice(0, 400) });
+  try {
+    const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], {
+      stdio: 'ignore',
+      detached: true,
+      windowsHide: true,
+    });
+    child.on('error', (error) => log.warn('environment broadcast failed to start', { scope, error: String(error) }));
+    child.unref();
+  } catch (error) {
+    log.warn('environment broadcast failed', { scope, error: String(error) });
+  }
 }
 
 export async function writePathValue(scope: PathScope, value: string): Promise<PathWriteResult> {
@@ -103,7 +117,7 @@ export async function writePathValue(scope: PathScope, value: string): Promise<P
       error: scope === 'machine' ? '写入系统 PATH 需要管理员权限' : add.stderr.trim() || '写入失败',
     };
   }
-  await broadcast(scope);
+  broadcast(scope);
   return { scope, changed: true, value };
 }
 
