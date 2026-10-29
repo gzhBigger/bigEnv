@@ -30,6 +30,8 @@ export interface Settings {
   shellEnabled: boolean;
   /** Where `<installRoot>\\<sdk>\\current` entries are published so every process can see them. */
   pathMode: PathMode;
+  /** SDKs whose `current` directory is published to the global PATH (empty = only the CLI shim). */
+  pathSdks: string[];
   /** Project directories managed on the projects page (absolute paths). */
   projects: string[];
 }
@@ -132,6 +134,8 @@ export interface ShellInfo {
   pathMode: PathMode;
   /** Stable `<installRoot>\<sdk>\current` directories published to PATH. */
   globalEntries: string[];
+  /** SDKs selected for global PATH publication. */
+  pathSdks: string[];
   /** Scope that actually carries the entries, null when pathMode is off. */
   activeScope: 'user' | 'machine' | null;
   conflicts: PathConflict[];
@@ -203,6 +207,7 @@ export interface Bridge {
     disable(): Promise<ShellInfo>;
     openTerminal(dir?: string): Promise<void>;
     setPathMode(mode: PathMode): Promise<ShellInfo>;
+    setPathSdks(sdks: string[]): Promise<ShellInfo>;
   };
   projects: {
     /** All managed projects, inspected (lock file contents included). */

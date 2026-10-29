@@ -155,6 +155,17 @@ export class CatalogService {
     this.installedProvider = provider;
   }
 
+  /**
+   * Drop the cached version lists so the next read reflects a fresh install/uninstall.
+   *
+   * `versions()` bakes `installed`/`current` into every row; without this a deleted version keeps
+   * showing as "当前" and can never be reinstalled.
+   */
+  invalidateVersions(sdk?: string): void {
+    if (sdk) this.versionsCache.delete(sdk);
+    else this.versionsCache.clear();
+  }
+
   private async installed(): Promise<Map<string, InstalledLookup>> {
     try {
       return await this.installedProvider();

@@ -246,6 +246,7 @@ const DEFAULT_SETTINGS: Settings = {
   showUnsupported: true,
   shellEnabled: true,
   pathMode: 'off',
+  pathSdks: ['node', 'go'],
   projects: ['D:\\workspace\\demo-shop', 'D:\\workspace\\api-server'],
 };
 
@@ -350,6 +351,7 @@ export function createMockBridge(): Bridge {
     pathEntries: installed.filter((item) => item.current).map((item) => item.path),
     vars: {},
     pathMode: settings.pathMode,
+    pathSdks: settings.pathSdks,
     globalEntries: installed.filter((item) => item.current).map((item) => `${settings.installRoot}\\${item.sdk}\\current`),
     activeScope: settings.pathMode === 'off' ? null : settings.pathMode,
     conflicts: [],
@@ -492,6 +494,11 @@ export function createMockBridge(): Bridge {
       },
       setPathMode: async (mode) => {
         settings = { ...settings, pathMode: mode };
+        await delay(150);
+        return envInfo();
+      },
+      setPathSdks: async (sdks) => {
+        settings = { ...settings, pathSdks: sdks };
         await delay(150);
         return envInfo();
       },

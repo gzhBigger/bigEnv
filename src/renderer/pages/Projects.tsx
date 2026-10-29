@@ -46,10 +46,14 @@ export function Projects(): JSX.Element {
       list.push(record.version);
       map.set(record.sdk, list);
     }
+    // Lock entries survive an uninstall: the SDK must stay listed so it can be switched off again.
+    for (const sdk of Object.keys(project?.versions ?? {})) {
+      if (!map.has(sdk)) map.set(sdk, []);
+    }
     return [...map.entries()]
       .map(([sdk, versions]) => ({ sdk, versions: versions.sort((a, b) => b.localeCompare(a, undefined, { numeric: true })) }))
       .sort((a, b) => a.sdk.localeCompare(b.sdk));
-  }, [installed]);
+  }, [installed, project?.versions]);
 
   const nameOf = (sdk: string): string => catalog.find((item) => item.id === sdk)?.name ?? sdk;
 
@@ -150,7 +154,7 @@ export function Projects(): JSX.Element {
               </div>
 
               <p className="muted hint">
-                勾选要在这个项目里启用的 SDK 及其版本；未勾选的一律不注入环境。保存后写入{' '}
+                勾选要在这个项目里启用的 SDK 及其版本；未勾选的一律不注入环境。已卸载的 SDK 会保留在列表并标记「未安装」，取消勾选即可从配置中移除。保存后写入{' '}
                 <code>{project.lockFile ?? `${project.dir}\\.bigenv.json`}</code>。
               </p>
 
@@ -181,7 +185,7 @@ export function Projects(): JSX.Element {
                         <select
                           className="select sm"
                           value={checked ?? ''}
-                          disabled={checked === undefined}
+                          disabled={checked === undefined || versions.length === 0}
                           onChange={(event) => toggle(sdk, event.target.value, true)}
                         >
                           {checked === undefined ? <option value="">未启用</option> : null}

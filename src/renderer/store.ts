@@ -12,7 +12,15 @@ import type {
 } from '../shared/types';
 import { bridge } from './lib/bridge';
 
-export type PageKey = 'overview' | 'catalog' | 'jobs' | 'projects' | 'environment' | 'health' | 'settings';
+export type PageKey =
+  | 'overview'
+  | 'catalog'
+  | 'jobs'
+  | 'projects'
+  | 'globals'
+  | 'environment'
+  | 'health'
+  | 'settings';
 
 interface Toast {
   text: string;
@@ -29,6 +37,7 @@ interface AppState {
   jobs: JobState[];
   versions: Record<string, VersionOption[]>;
   versionsLoading: string | null;
+  versionsError: Record<string, string>;
   selectedSdk: string | null;
   projects: ProjectInfo[];
   projectDir: string | null;
@@ -41,6 +50,7 @@ interface AppState {
   init(): Promise<void>;
   setPage(page: PageKey): void;
   openSdk(sdkId: string): void;
+  reloadVersions(sdkId: string): Promise<void>;
   closeSdk(): void;
   refreshCatalog(force?: boolean): Promise<void>;
   refreshInstalled(): Promise<void>;
@@ -59,6 +69,7 @@ interface AppState {
   loadShell(): Promise<void>;
   toggleShell(enabled: boolean): Promise<void>;
   setPathMode(mode: PathMode): Promise<void>;
+  setPathSdks(sdks: string[]): Promise<void>;
   scanHealth(): Promise<void>;
   cleanHealth(options: { cache?: boolean; orphans?: boolean }): Promise<void>;
   notify(text: string, kind?: 'ok' | 'err'): void;
@@ -73,6 +84,7 @@ export const useApp = create<AppState>((set, get) => ({
   jobs: [],
   versions: {},
   versionsLoading: null,
+  versionsError: {},
   selectedSdk: null,
   projects: [],
   projectDir: null,
@@ -95,15 +107,16 @@ export const useApp = create<AppState>((set, get) => ({
         void get().refreshInstalled();
         void get().refreshCatalog();
         void get().loadProjects();
-        set((state) => ({
-          versions: { ...state.versions, [job.sdk]: [] },
-        }));
+        // The version list embeds installed/current flags, so it has to be re-read after the job settles.
+        if (job.phase === 'done') void get().reloadVersions(job.sdk);
       }
       if (job.phase === 'error') get().notify(`${job.sdk} ${job.version} 安装失败：${job.error ?? '未知错误'}`, 'err');
     });
     bridge.events.onInstalled(() => {
       void get().refreshInstalled();
       void get().refreshCatalog();
+      const selected = get().selectedSdk;
+      if (selected) void get().reloadVersions(selected);
     });
     bridge.events.onSettings((settings) => set({ settings }));
     bridge.events.onCatalog((summary) =>
@@ -134,17 +147,27 @@ export const useApp = create<AppState>((set, get) => ({
 
   openSdk(sdkId) {
     set({ selectedSdk: sdkId });
-    void (async () => {
-      set({ versionsLoading: sdkId });
-      try {
-        const versions = await bridge.catalog.versions(sdkId);
-        set((state) => ({ versions: { ...state.versions, [sdkId]: versions } }));
-      } catch (error) {
-        get().notify(`读取版本失败：${(error as Error).message}`, 'err');
-      } finally {
-        set({ versionsLoading: null });
-      }
-    })();
+    void get().reloadVersions(sdkId);
+  },
+
+  async reloadVersions(sdkId) {
+    set({ versionsLoading: sdkId });
+    try {
+      const versions = await bridge.catalog.versions(sdkId);
+      set((state) => ({
+        versions: { ...state.versions, [sdkId]: versions },
+        versionsError: { ...state.versionsError, [sdkId]: '' },
+      }));
+    } catch (error) {
+      const message = (error as Error).message;
+      set((state) => ({
+        versions: { ...state.versions, [sdkId]: [] },
+        versionsError: { ...state.versionsError, [sdkId]: message },
+      }));
+      get().notify(`读取版本失败：${message}`, 'err');
+    } finally {
+      set({ versionsLoading: null });
+    }
   },
 
   closeSdk() {
@@ -184,8 +207,11 @@ export const useApp = create<AppState>((set, get) => ({
   async startInstall(sdkId, version) {
     try {
       const job = await bridge.installs.start(sdkId, version);
-      set((state) => ({ jobs: [job, ...state.jobs.filter((item) => item.id !== job.id)] }));
-      set((state) => ({ versions: { ...state.versions, [sdkId]: [] } }));
+      set((state) => ({
+        jobs: [job, ...state.jobs.filter((item) => item.id !== job.id)],
+        // The queue dock owns progress now; keeping the drawer open just shows a stale, empty list.
+        selectedSdk: null,
+      }));
       get().notify(`已加入安装队列：${sdkId} ${version}`);
     } catch (error) {
       get().notify(`安装失败：${(error as Error).message}`, 'err');
@@ -206,6 +232,7 @@ export const useApp = create<AppState>((set, get) => ({
       await bridge.installed.use(sdkId, version);
       await get().refreshInstalled();
       await get().refreshCatalog();
+      await get().reloadVersions(sdkId);
       get().notify(`已切换到 ${sdkId} ${version}`);
     } catch (error) {
       get().notify(`切换失败：${(error as Error).message}`, 'err');
@@ -217,6 +244,8 @@ export const useApp = create<AppState>((set, get) => ({
       await bridge.installed.uninstall(sdkId, version);
       await get().refreshInstalled();
       await get().refreshCatalog();
+      await get().reloadVersions(sdkId);
+      await get().loadShell();
       get().notify(`已删除 ${sdkId} ${version}`);
     } catch (error) {
       get().notify(`删除失败：${(error as Error).message}`, 'err');
@@ -336,6 +365,19 @@ export const useApp = create<AppState>((set, get) => ({
       );
     } catch (error) {
       get().notify(`写入 PATH 失败：${(error as Error).message}`, 'err');
+    } finally {
+      set({ busy: null });
+    }
+  },
+
+  async setPathSdks(sdks) {
+    set({ busy: 'path-sdks' });
+    try {
+      const shell = await bridge.env.setPathSdks(sdks);
+      set({ shell });
+      set({ settings: await bridge.settings.get() });
+    } catch (error) {
+      get().notify(`更新 PATH 条目失败：${(error as Error).message}`, 'err');
     } finally {
       set({ busy: null });
     }

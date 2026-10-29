@@ -1,24 +1,29 @@
 import type { JSX } from 'react';
 import { useEffect, useMemo, useState } from 'react';
-import { X, ExternalLink, Download, Check, Trash2, Search } from 'lucide-react';
+import { X, ExternalLink, Download, Check, Trash2, Search, RefreshCw } from 'lucide-react';
 import { bridge } from '../lib/bridge';
 import { useApp } from '../store';
 import { formatBytes, glyphOf } from '../lib/format';
 
 const PAGE_SIZE = 60;
 
+type Tab = 'installed' | 'available';
+
 export function SdkSheet(): JSX.Element | null {
   const selectedSdk = useApp((state) => state.selectedSdk);
   const catalog = useApp((state) => state.catalog);
   const versions = useApp((state) => state.versions);
   const versionsLoading = useApp((state) => state.versionsLoading);
+  const versionsError = useApp((state) => state.versionsError);
   const closeSdk = useApp((state) => state.closeSdk);
+  const reloadVersions = useApp((state) => state.reloadVersions);
   const startInstall = useApp((state) => state.startInstall);
   const useVersion = useApp((state) => state.useVersion);
   const uninstall = useApp((state) => state.uninstall);
 
   const [query, setQuery] = useState('');
   const [limit, setLimit] = useState(PAGE_SIZE);
+  const [tab, setTab] = useState<Tab>('installed');
 
   useEffect(() => {
     setQuery('');
@@ -26,12 +31,25 @@ export function SdkSheet(): JSX.Element | null {
   }, [selectedSdk]);
 
   const list = selectedSdk ? versions[selectedSdk] ?? [] : [];
+  const error = selectedSdk ? versionsError[selectedSdk] ?? '' : '';
+
+  const installedList = useMemo(() => list.filter((option) => option.installed), [list]);
+
+  // Default to the list that actually has content: installed runtimes first, otherwise all versions.
+  useEffect(() => {
+    if (list.length === 0) return;
+    setTab(installedList.length > 0 ? 'installed' : 'available');
+    // Only re-decide when the drawer switches SDK or the data arrives for the first time.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedSdk, list.length]);
+
+  const source = tab === 'installed' ? installedList : list;
 
   const filtered = useMemo(() => {
     const keyword = query.trim().toLowerCase();
-    if (!keyword) return list;
-    return list.filter((option) => option.version.toLowerCase().includes(keyword));
-  }, [list, query]);
+    if (!keyword) return source;
+    return source.filter((option) => option.version.toLowerCase().includes(keyword));
+  }, [source, query]);
 
   const visible = filtered.slice(0, limit);
 
@@ -77,6 +95,37 @@ export function SdkSheet(): JSX.Element | null {
             {summary?.currentVersion && <span className="tag green">当前 {summary.currentVersion}</span>}
           </div>
         </div>
+
+        <div className="sheet-tabs">
+          {(
+            [
+              { id: 'installed' as Tab, label: `已安装 ${installedList.length}` },
+              { id: 'available' as Tab, label: `可安装 ${list.length}` },
+            ]
+          ).map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className={tab === item.id ? 'active' : ''}
+              onClick={() => {
+                setTab(item.id);
+                setLimit(PAGE_SIZE);
+              }}
+            >
+              {item.label}
+            </button>
+          ))}
+          <button
+            type="button"
+            className="btn ghost sm"
+            style={{ marginLeft: 'auto' }}
+            title="重新读取版本"
+            onClick={() => void reloadVersions(selectedSdk)}
+          >
+            <RefreshCw size={12} /> 刷新
+          </button>
+        </div>
+
         <div className="sheet-search">
           <div style={{ position: 'relative', flex: 1 }}>
             <Search size={13} style={{ position: 'absolute', left: 9, top: 9, color: 'var(--dim)' }} />
@@ -92,7 +141,7 @@ export function SdkSheet(): JSX.Element | null {
             />
           </div>
           <span className="hint-text" style={{ whiteSpace: 'nowrap' }}>
-            {filtered.length} / {list.length}
+            {filtered.length} / {source.length}
           </span>
         </div>
         <div className="sheet-body">
@@ -101,8 +150,21 @@ export function SdkSheet(): JSX.Element | null {
               <span className="loading" /> 正在读取版本列表…
             </div>
           )}
-          {!loading && list.length === 0 && <div className="empty">暂无该 SDK 的版本元数据</div>}
-          {!loading && list.length > 0 && filtered.length === 0 && <div className="empty">没有匹配“{query}”的版本</div>}
+          {!loading && error && (
+            <div className="empty">
+              <p>读取版本失败：{error}</p>
+              <button className="btn sm" onClick={() => void reloadVersions(selectedSdk)}>
+                <RefreshCw size={12} /> 重试
+              </button>
+            </div>
+          )}
+          {!loading && !error && list.length === 0 && <div className="empty">暂无该 SDK 的版本元数据</div>}
+          {!loading && !error && list.length > 0 && source.length === 0 && (
+            <div className="empty">{tab === 'installed' ? '还没有安装任何版本' : '没有可安装的版本'}</div>
+          )}
+          {!loading && !error && source.length > 0 && filtered.length === 0 && (
+            <div className="empty">没有匹配“{query}”的版本</div>
+          )}
           {visible.map((option) => (
             <div className="version-row" key={option.version}>
               <div className="version-name">{option.version}</div>
@@ -114,6 +176,9 @@ export function SdkSheet(): JSX.Element | null {
                 {option.sizeBytes && <span className="tag">{formatBytes(option.sizeBytes)}</span>}
                 {option.current && <span className="tag blue">当前</span>}
                 {!option.current && option.installed && <span className="tag">已安装</span>}
+                {!option.installable && !option.installed && (
+                  <span className="tag amber">{option.unavailableReason ?? '不可安装'}</span>
+                )}
               </div>
               <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
                 {option.current ? (

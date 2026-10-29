@@ -10,6 +10,7 @@ import { Overview } from './pages/Overview';
 import { Catalog } from './pages/Catalog';
 import { Jobs } from './pages/Jobs';
 import { Projects } from './pages/Projects';
+import { GlobalEnv } from './pages/GlobalEnv';
 import { Environment } from './pages/Environment';
 import { Health } from './pages/Health';
 import { Settings } from './pages/Settings';
@@ -19,6 +20,7 @@ const TITLES: Record<PageKey, string> = {
   catalog: 'SDK 目录',
   jobs: '安装队列',
   projects: '项目环境',
+  globals: '全局环境',
   environment: 'Shell 集成',
   health: '体检与清理',
   settings: '设置',
@@ -32,6 +34,8 @@ function PageContent({ page }: { page: PageKey }): JSX.Element {
       return <Jobs />;
     case 'projects':
       return <Projects />;
+    case 'globals':
+      return <GlobalEnv />;
     case 'environment':
       return <Environment />;
     case 'health':

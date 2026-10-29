@@ -779,6 +779,35 @@ code,
   border-bottom: 1px solid var(--border);
 }
 
+.sheet-tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.sheet-tabs > button:not(.btn) {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  padding: 5px 10px;
+  color: var(--muted);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.sheet-tabs > button:not(.btn):hover {
+  color: var(--text);
+  background: rgba(76, 154, 255, 0.08);
+}
+
+.sheet-tabs > button.active {
+  color: var(--text);
+  background: rgba(76, 154, 255, 0.16);
+  border-color: rgba(76, 154, 255, 0.35);
+}
+
 .sheet-search {
   display: flex;
   align-items: center;

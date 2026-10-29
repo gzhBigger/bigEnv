@@ -25,6 +25,13 @@ Status: implemented
 - 写完必须广播环境变更：只 `reg add` 不会通知已运行的进程，所以再用 `[Environment]::SetEnvironmentVariable('Path', <读回的值>, 'User'|'Machine')` 触发 `WM_SETTINGCHANGE`。
 - **遮蔽检测**：按 `machine` 在前、`user` 在后的顺序展开整个 PATH，检查 bigEnv 托管的目录之前是否已有同名可执行文件（`SDK_EXE_HINTS` 优先，否则取目录里前三个 `.exe`）。命中就在 UI 用红字点名「`node.exe` 被更靠前的 `D:\VMR SDKs\...` 抢先，bigEnv 的 node 不会生效」——不静默失败，也不自动去改别人的 PATH。
 
+**A2. 只发布勾选的 SDK（`settings.pathSdks: string[]`，第三轮反馈后加入）**
+
+- 第一版把**所有** current 目录都写进 PATH，用户反驳得很直接：「path 的配置不是应该在 sdk 中吗……可以选择我们已安装的 SDK 进行 path 配置」。全局可见性变成了隐性副作用：装一个、全局多一个，还可能与已有工具链抢名字。
+- 现在 PATH 条目 = `pathSdks ∩ 已安装且有 current` 的 `current` 目录；空列表时只发布 `<userData>\bin` 这一个 CLI 启动器目录，仍然能 `bigenv run`。
+- 独立成「全局环境」页（`pages/GlobalEnv.tsx`，page key `globals`），按 SDK 逐行勾选并显示将会写入的路径；Shell 集成页只留 profile 注入与环境脚本，不再承载全局 PATH。
+- 旧 settings 没有 `pathSdks` 键时（`hasExplicitPathSdks()` 为 false），启动时用当时激活的 SDK 播种一次，保持升级前后的 PATH 行为一致；用户之后取消勾选就是显式意图，不会再被覆盖。
+
 **B. `bigenv` CLI（`src/cli/index.ts` → `out/cli.cjs` → 打包进 `resources/cli.cjs`）**
 
 - 独立 Node 脚本，不 import electron，只读 `%APPDATA%\bigEnv\settings.json` 的 installRoot 与磁盘上的 `.bigenv.json`，所以能在任何进程里跑。
@@ -41,11 +48,13 @@ Status: implemented
 - **写进系统 PATH 并把 vmr 的条目挤下去**：能「赢」，但擅自改动另一个工具的安装痕迹，卸载 bigEnv 后用户的其它工具链可能坏掉。选择只报告冲突。
 - **CLI 用 Go/Rust 编译成单文件**：对用户零依赖，但要引入第二套工具链与交叉编译。复用 Electron 自带的 Node 与 `ELECTRON_RUN_AS_NODE=1` 已足够，代价是启动多几十毫秒。
 - **CLI 复用主进程（IPC 到已运行的 app）**：省去重复解析逻辑，但 app 没启动时 CLI 就不可用——而这正是 CI/agent 场景的常态。改为直接读磁盘状态，逻辑与主进程各自一份（`envApplies` 等少量规则重复，见 Consequences）。
+- **默认把所有 current 都写进 PATH**：实现最短，但全局命名空间被安装动作悄悄改写，用户无法只暴露 node 而隐藏另一个同名工具；也已与「装完就有、删了还在」的 stale 感知冲突。改为显式勾选。
 - **全局 `cd` hook 自动切版本**：见 [Shell 注入与项目锁](2026-10-29-env-injection-and-project-lock.md)，已否。
 
 ## Consequences
 
 - 收益：`node`/`go` 这类运行时对 IDE、AI agent、`cmd.exe`、计划任务都可见；切版本不再需要重开终端；冲突可见而非静默失效。
+- 收益（A2）：全局可见性变成逐 SDK 的显式选择，卸载某个版本不会留下悬空条目（`pathSdks` 里已不在本机安装的项在 UI 标为「已不在本机安装」并可一键取消）。
 - 代价与边界：
   - 全局 PATH 是**显式选择**，默认 `off`；`machine` 需要管理员，非管理员时报错而不是降级成用户 PATH。
   - 已经运行的进程（包括已开的 IDE）不会重读 PATH，必须重启它们——UI 文案已写明。

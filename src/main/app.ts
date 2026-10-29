@@ -8,7 +8,7 @@ import { initLogger } from './logger';
 import { appPaths } from './paths';
 import { ProjectService } from './projects';
 import { Registry } from './registry';
-import { getSettings, loadSettings, updateSettings } from './store';
+import { getSettings, hasExplicitPathSdks, loadSettings, updateSettings } from './store';
 import { mapLimit } from './util';
 import { MetadataService } from './versions';
 import fs from 'node:fs/promises';
@@ -46,6 +46,7 @@ export class AppRuntime {
       onInstalledChange: async () => {
         this.registry.invalidate();
         await this.registry.scan();
+        this.catalog.invalidateVersions();
         await this.env.refresh();
       },
     });
@@ -67,6 +68,12 @@ export class AppRuntime {
     const caps = await detectCapabilities();
     const runtime = new AppRuntime(caps);
     await runtime.registry.scan();
+    if (!hasExplicitPathSdks()) {
+      // Settings from before per-SDK PATH selection: keep the old behaviour by publishing every active runtime.
+      const index = await runtime.registry.index();
+      const active = [...index.current.keys()];
+      if (active.length > 0) await updateSettings({ pathSdks: active });
+    }
     await runtime.env.refresh();
     return runtime;
   }

@@ -83,6 +83,7 @@ export function defaultSettings(): Settings {
     showUnsupported: true,
     shellEnabled: false,
     pathMode: 'off',
+    pathSdks: [],
     projects: [],
   };
 }

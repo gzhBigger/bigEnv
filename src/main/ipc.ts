@@ -58,12 +58,16 @@ export function registerIpc(runtime: AppRuntime): void {
 
   ipcMain.handle('bigenv:installed:list', async () => await runtime.registry.list());
   ipcMain.handle('bigenv:installed:use', async (_event, sdk: unknown, version: unknown) => {
-    await runtime.registry.use(assertSdk(sdk), assertVersion(version));
+    const target = assertSdk(sdk);
+    await runtime.registry.use(target, assertVersion(version));
+    runtime.catalog.invalidateVersions(target);
     await runtime.env.refresh();
     broadcast('bigenv:installed', null);
   });
   ipcMain.handle('bigenv:installed:uninstall', async (_event, sdk: unknown, version: unknown) => {
-    await runtime.registry.remove(assertSdk(sdk), assertVersion(version));
+    const target = assertSdk(sdk);
+    await runtime.registry.remove(target, assertVersion(version));
+    runtime.catalog.invalidateVersions(target);
     await runtime.env.refresh();
     broadcast('bigenv:installed', null);
   });
@@ -94,6 +98,14 @@ export function registerIpc(runtime: AppRuntime): void {
     // Publish first: a failed write (no admin rights) must not leave the setting out of sync.
     await runtime.env.setPathMode(mode);
     const settings = await runtime.applySettings({ pathMode: mode });
+    broadcast('bigenv:settings', settings);
+    return await runtime.env.info();
+  });
+
+  ipcMain.handle('bigenv:env:setPathSdks', async (_event, sdks: unknown) => {
+    if (!Array.isArray(sdks)) throw new Error('非法的 SDK 列表');
+    const list = [...new Set(sdks.filter((item): item is string => typeof item === 'string').map(assertSdk))];
+    const settings = await runtime.applySettings({ pathSdks: list });
     broadcast('bigenv:settings', settings);
     return await runtime.env.info();
   });

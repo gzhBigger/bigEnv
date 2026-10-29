@@ -163,13 +163,13 @@ export class EnvManager {
   }
 
   /** Directories of the active version, addressed through the stable `current` junction. */
-  private async entryDirsBySdk(): Promise<{ sdk: string; dirs: string[] }[]> {
+  private async entryDirsBySdk(only?: ReadonlySet<string>): Promise<{ sdk: string; dirs: string[] }[]> {
     const settings = this.getSettings();
     const records = await this.records();
     const out: { sdk: string; dirs: string[] }[] = [];
-    const sdks = [...new Set(records.filter((record) => record.current).map((record) => record.sdk))].sort((a, b) =>
-      a.localeCompare(b),
-    );
+    const sdks = [...new Set(records.filter((record) => record.current).map((record) => record.sdk))]
+      .filter((sdk) => !only || only.has(sdk))
+      .sort((a, b) => a.localeCompare(b));
     for (const sdk of sdks) {
       const record = records.find((item) => item.sdk === sdk && item.current);
       if (!record) continue;
@@ -182,7 +182,7 @@ export class EnvManager {
   }
 
   async globalEntries(): Promise<string[]> {
-    const groups = await this.entryDirsBySdk();
+    const groups = await this.entryDirsBySdk(new Set(this.getSettings().pathSdks));
     return uniquePaths(groups.flatMap((group) => group.dirs));
   }
 
@@ -233,7 +233,7 @@ export class EnvManager {
     const matcher = makeManagedMatcher(settings.installRoot, appPaths().binDir);
     const effective = await effectivePathDirs();
     const normalized = effective.map((dir) => path.normalize(dir).toLowerCase());
-    const groups = await this.entryDirsBySdk();
+    const groups = await this.entryDirsBySdk(new Set(settings.pathSdks));
     const conflicts: PathConflict[] = [];
     for (const group of groups) {
       let found = false;
@@ -363,6 +363,7 @@ export class EnvManager {
       pathEntries: injection.pathEntries,
       vars: injection.vars,
       pathMode: pathState.mode,
+      pathSdks: this.getSettings().pathSdks,
       globalEntries: pathState.entries,
       activeScope: pathState.activeScope,
       conflicts: pathState.conflicts,
