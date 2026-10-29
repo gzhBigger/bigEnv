@@ -33,6 +33,7 @@ function sanitize(input: Partial<Settings>, base: Settings): Settings {
       seen.add(key);
       return true;
     });
+  merged.theme = merged.theme === 'light' || merged.theme === 'dark' ? merged.theme : 'system';
   return merged;
 }
 

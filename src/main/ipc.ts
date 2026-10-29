@@ -1,11 +1,26 @@
-import { BrowserWindow, dialog, ipcMain, shell } from 'electron';
-import type { Settings } from '../shared/types';
+import { BrowserWindow, dialog, ipcMain, nativeTheme, shell } from 'electron';
+import type { Settings, ThemeMode } from '../shared/types';
 import type { AppRuntime } from './app';
 import { createLogger } from './logger';
 import { appPaths } from './paths';
 import { getSettings, updateSettings } from './store';
 
 const log = createLogger('ipc');
+
+/** Native window controls live outside the page, so the palette has to be pushed to them. */
+const TITLEBAR_COLORS = {
+  dark: { color: '#0b0f14', symbolColor: '#c8d4e4', height: 44 },
+  light: { color: '#ffffff', symbolColor: '#1f2937', height: 44 },
+} as const;
+
+export function paintTitleBars(theme: ThemeMode): void {
+  const dark = theme === 'dark' || (theme === 'system' && nativeTheme.shouldUseDarkColors);
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (win.isDestroyed()) continue;
+    win.setTitleBarOverlay(dark ? TITLEBAR_COLORS.dark : TITLEBAR_COLORS.light);
+    win.setBackgroundColor(dark ? '#0a0e13' : '#f4f6fa');
+  }
+}
 
 const SDK_PATTERN = /^[\w.+-]+$/;
 const VERSION_PATTERN = /^[\w.+. -]+$/;
@@ -179,6 +194,14 @@ export function registerIpc(runtime: AppRuntime): void {
   ipcMain.handle('bigenv:system:openExternal', async (_event, url: unknown) => {
     if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) throw new Error('仅支持 http/https 链接');
     await shell.openExternal(url);
+  });
+  ipcMain.handle('bigenv:system:theme', async (_event, theme: unknown) => {
+    if (theme !== 'system' && theme !== 'light' && theme !== 'dark') throw new Error('非法的主题');
+    paintTitleBars(theme);
+  });
+  // `system` mode must follow the OS live, not only when the user toggles the switch.
+  nativeTheme.on('updated', () => {
+    if (getSettings().theme === 'system') paintTitleBars('system');
   });
 
   ipcMain.handle('bigenv:health:scan', async () => await runtime.health.scan());

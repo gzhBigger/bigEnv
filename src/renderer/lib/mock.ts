@@ -248,6 +248,7 @@ const DEFAULT_SETTINGS: Settings = {
   pathMode: 'off',
   pathSdks: ['node', 'go'],
   projects: ['D:\\workspace\\demo-shop', 'D:\\workspace\\api-server'],
+  theme: 'system',
 };
 
 function versionsOf(seed: Seed, installed: InstallRecord[]): VersionOption[] {
@@ -540,6 +541,7 @@ export function createMockBridge(): Bridge {
       pickDirectory: async () => 'D:\\workspace\\demo-shop',
       openPath: async () => undefined,
       openExternal: async () => undefined,
+      applyTheme: async () => undefined,
     },
     health: {
       scan: async () => {

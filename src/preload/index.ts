@@ -58,6 +58,7 @@ const bridge: Bridge = {
     pickDirectory: () => invoke<string | null>('bigenv:system:pickDirectory'),
     openPath: (target) => invoke('bigenv:system:openPath', target),
     openExternal: (url) => invoke('bigenv:system:openExternal', url),
+    applyTheme: (theme) => invoke('bigenv:system:theme', theme),
   },
   health: {
     scan: () => invoke('bigenv:health:scan'),

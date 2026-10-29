@@ -3,8 +3,9 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { AppRuntime } from './app';
 import { elevatedAction, runElevatedPathWrite } from './elevated';
-import { registerIpc } from './ipc';
+import { paintTitleBars, registerIpc } from './ipc';
 import { createLogger } from './logger';
+import { getSettings } from './store';
 
 const log = createLogger('main');
 const isDev = !app.isPackaged;
@@ -81,6 +82,8 @@ function createWindow(): void {
       sandbox: false,
     },
   });
+
+  paintTitleBars(getSettings().theme);
 
   mainWindow.once('ready-to-show', () => mainWindow?.show());
   mainWindow.on('closed', () => {

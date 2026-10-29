@@ -85,6 +85,7 @@ export function defaultSettings(): Settings {
     pathMode: 'off',
     pathSdks: [],
     projects: [],
+    theme: 'system',
   };
 }
 

@@ -8,9 +8,11 @@ import type {
   SdkSummary,
   Settings,
   ShellInfo,
+  ThemeMode,
   VersionOption,
 } from '../shared/types';
 import { bridge } from './lib/bridge';
+import { applyTheme } from './lib/theme';
 
 export type PageKey =
   | 'overview'
@@ -87,6 +89,8 @@ interface AppState {
   toggleShell(enabled: boolean): Promise<void>;
   setPathMode(mode: PathMode): Promise<void>;
   setPathSdks(sdks: string[]): Promise<void>;
+  /** Switches the palette immediately, then persists it in settings.json. */
+  setTheme(mode: ThemeMode): Promise<void>;
   scanHealth(): Promise<void>;
   cleanHealth(options: { cache?: boolean; orphans?: boolean }): Promise<void>;
   notify(text: string, kind?: 'ok' | 'err'): void;
@@ -138,7 +142,10 @@ export const useApp = create<AppState>((set, get) => ({
       const selected = get().selectedSdk;
       if (selected) void get().reloadVersions(selected);
     });
-    bridge.events.onSettings((settings) => set({ settings }));
+    bridge.events.onSettings((settings) => {
+      applyTheme(settings.theme);
+      set({ settings });
+    });
     bridge.events.onCatalog((summary) =>
       set((state) => ({ catalog: state.catalog.map((item) => (item.id === summary.id ? summary : item)) })),
     );
@@ -154,6 +161,9 @@ export const useApp = create<AppState>((set, get) => ({
       jobs,
       dockVisible: jobs.some((job) => !['done', 'error', 'canceled'].includes(job.phase)),
     });
+    // settings.json is the source of truth; the cached palette only covers the first paint.
+    applyTheme(settings.theme);
+    void bridge.system.applyTheme(settings.theme);
     await get().refreshCatalog();
     void get().loadShell();
     void get().loadProjects();
@@ -276,6 +286,7 @@ export const useApp = create<AppState>((set, get) => ({
     set({ busy: 'settings' });
     try {
       const settings = await bridge.settings.update(patch);
+      applyTheme(settings.theme);
       set({ settings });
       get().notify('设置已保存');
       await get().refreshCatalog();
@@ -391,6 +402,20 @@ export const useApp = create<AppState>((set, get) => ({
     } finally {
       await keepPending(startedAt);
       set({ busy: null, pathModePending: null });
+    }
+  },
+
+  async setTheme(mode) {
+    // Repaint first so the click feels instant; persistence follows.
+    applyTheme(mode);
+    set((state) => ({ settings: state.settings ? { ...state.settings, theme: mode } : state.settings }));
+    try {
+      const settings = await bridge.settings.update({ theme: mode });
+      set({ settings });
+      await bridge.system.applyTheme(settings.theme);
+    } catch (error) {
+      applyTheme(get().settings?.theme ?? 'system');
+      get().notify(`主题保存失败：${errorText(error)}`, 'err');
     }
   },
 

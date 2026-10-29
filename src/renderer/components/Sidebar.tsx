@@ -77,7 +77,6 @@ export function Sidebar(): JSX.Element {
           <span className="dot" />
           元数据源在线
         </div>
-        <div style={{ marginTop: 4 }}>Electron · React · TS</div>
       </div>
     </aside>
   );

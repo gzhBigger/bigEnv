@@ -5,6 +5,7 @@ import { useApp, type PageKey } from './store';
 import { Sidebar } from './components/Sidebar';
 import { JobDock } from './components/JobDock';
 import { SdkSheet } from './components/SdkSheet';
+import { ThemeSwitch } from './components/ThemeSwitch';
 import { Toast } from './components/Toast';
 import { Overview } from './pages/Overview';
 import { Catalog } from './pages/Catalog';
@@ -69,6 +70,7 @@ export function App(): JSX.Element {
           </span>
           <span className="spacer" />
           <span className="hint">{isDesktop ? '桌面模式' : '浏览器预览（模拟数据）'}</span>
+          <ThemeSwitch />
         </div>
         <div className="scroll">
           <PageContent page={page} />

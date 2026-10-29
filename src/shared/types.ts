@@ -13,6 +13,9 @@ export type MirrorMode = 'off' | 'cn';
 
 export type PathMode = 'off' | 'user' | 'machine';
 
+/** `system` follows the OS appearance; the other two pin the palette. */
+export type ThemeMode = 'system' | 'light' | 'dark';
+
 export interface Settings {
   /** Directory that holds `<sdk>/<version>` install trees. */
   installRoot: string;
@@ -34,6 +37,8 @@ export interface Settings {
   pathSdks: string[];
   /** Project directories managed on the projects page (absolute paths). */
   projects: string[];
+  /** Color scheme for the app shell. */
+  theme: ThemeMode;
 }
 
 export interface SdkSummary {
@@ -223,6 +228,8 @@ export interface Bridge {
     pickDirectory(): Promise<string | null>;
     openPath(target: string): Promise<void>;
     openExternal(url: string): Promise<void>;
+    /** Repaints the native title bar buttons so they stay legible on the active palette. */
+    applyTheme(theme: ThemeMode): Promise<void>;
   };
   health: {
     scan(): Promise<HealthReport>;
