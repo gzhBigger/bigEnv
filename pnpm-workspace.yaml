@@ -1,0 +1,6 @@
+allowBuilds:
+  electron: true
+  electron-winstaller: true
+  esbuild: true
+minimumReleaseAgeExclude:
+  - lucide-react@1.63.0

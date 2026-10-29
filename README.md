@@ -1,1 +1,122 @@
 # bigEnv
+
+桌面端运行环境管理器：把 Node.js、Python、Go、JDK、Rust、.NET、Zig 这类语言运行时与命令行工具收进一个窗口，负责**发现版本 → 下载校验 → 解压安装 → 切换当前版本 → 注入 Shell → 按项目锁定版本 → 体检清理**。
+
+灵感与元数据来自 [gvcgo/version-manager](https://github.com/gvcgo/version-manager)（vmr），数据源为 [gvcgo/vsources](https://github.com/gvcgo/vsources)。
+
+![概览](docs/screenshots/overview.png)
+
+## 能力
+
+- **SDK 目录**：读取 vsources 的 83 个 SDK（Windows 上 52 个可直接安装），按分类浏览、搜索，支持镜像与代理。
+- **安装与切换**：zip / tar.gz 解压安装到 `~/.bigenv/<sdk>/<version>`，`current` 用 Windows junction 指向当前版本；切换只改链接，不复制文件。下载支持断点续传、sha256 校验、并发队列、取消与失败清理。
+- **已安装管理**：版本列表、大小、安装时间、来源；设为当前、打开目录、删除。
+- **Shell 集成**：生成 `env.ps1` / `env.cmd` / `env.sh`，可选在 PowerShell profile 中写入带标记的加载块；关闭时删除标记块。「打开终端」把环境只注入新进程，不动系统环境变量。
+- **项目环境**：读取 `.bigenv.json`（兼容 `.vmr.lock`，也支持 `sdk@version` 文本），按锁文件版本打开终端，或把当前环境写回锁文件。
+- **体检与清理**：统计安装占用与下载缓存，找出没有元数据的残留版本目录、失效的 `current` 链接，一键清理缓存或残留目录。
+- 深色界面、零配置可用；元数据源、镜像、代理、并发数、安装根目录都可在设置里改。
+
+| SDK 目录 | 版本选择 |
+| --- | --- |
+| ![SDK 目录](docs/screenshots/catalog.png) | ![版本](docs/screenshots/versions.png) |
+
+| Shell 集成 | 体检与清理 |
+| --- | --- |
+| ![Shell 集成](docs/screenshots/environment.png) | ![体检](docs/screenshots/health.png) |
+
+## 架构
+
+```
+src/
+  main/        Electron 主进程（Node 侧全部系统能力）
+    app.ts         组合根：registry / catalog / jobs / env / projects / health
+    catalog.ts     元数据 → 可安装性判定、安装计划
+    versions.ts    vsources 拉取、缓存、版本比较、镜像改写
+    jobs.ts        安装队列（并发、进度、取消、清理）
+    archive.ts     zip（yauzl）/ tar.gz（tar）解压，防路径穿越
+    http.ts        undici 下载（代理、重试、sha256、进度）
+    registry.ts    <installRoot>/<sdk>/<version> + current 链接 + .bigenv.json
+    envManager.ts  env 脚本与 profile 标记块、打开注入终端
+    projects.ts    项目锁文件发现与合并写入
+    health.ts      占用统计、残留目录、失效链接
+    ipc.ts         bigenv:* 通道
+  preload/     contextBridge 暴露 window.bigenv（Bridge 接口）
+  renderer/    React 19 + zustand 界面
+  shared/      主进程与渲染进程共享的类型与分类常量
+```
+
+前后进程的唯一契约是 `src/shared/types.ts` 里的 `Bridge`；渲染进程在没有 `window.bigenv` 时自动使用 `src/renderer/lib/mock.ts`，因此可以在普通浏览器里调样式。
+
+设计取舍记录在 [.agents/notes/](.agents/notes/)：
+
+- [桌面端的技术栈与主进程分层](.agents/notes/implemented/architecture/2026-10-29-electron-desktop-shell.md)
+- [直接消费 vsources 元数据，不移植 vmr 的 Lua 运行时](.agents/notes/implemented/feature/2026-10-29-vsources-catalog-engine.md)
+- [Shell 注入与项目锁](.agents/notes/implemented/feature/2026-10-29-env-injection-and-project-lock.md)
+- [用 CDP 脚本验证界面](.agents/notes/implemented/process/2026-10-29-verification-harness.md)
+
+## 开发
+
+需要 Node 22+ 与 pnpm。
+
+```powershell
+pnpm install
+# pnpm 11 会跳过 electron 的安装脚本，需要手动补一次（国内可用 npmmirror）
+$env:ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"
+node node_modules\electron\install.js
+
+pnpm dev        # vite + esbuild watch + electron
+```
+
+其它命令：
+
+```powershell
+pnpm typecheck      # 主进程与渲染进程分别 tsc --noEmit
+pnpm build          # 主进程（esbuild）+ 渲染进程（vite）
+pnpm start          # build 后直接启动
+pnpm dist           # electron-builder 打 Windows 安装包到 release/
+pnpm verify-notes   # 校验 .agents/notes 的结构与格式
+```
+
+> 本机环境若预设了 `ELECTRON_RUN_AS_NODE=1`，启动前必须清空，否则 Electron 会以 Node 模式运行主进程并报 `Cannot read properties of undefined (reading 'isPackaged')`：
+>
+> ```powershell
+> $env:ELECTRON_RUN_AS_NODE=$null
+> npx electron . --remote-debugging-port=9333
+> ```
+
+## 数据与磁盘布局
+
+```
+%APPDATA%\bigEnv\            设置、日志、元数据缓存、下载缓存、生成的 env 脚本
+~/.bigenv/                   默认安装根（可在设置里改）
+  fd/
+    10.5.0/                 实体目录，内含 .bigenv.json
+    current -> 10.5.0       Windows junction
+  lazygit/
+    0.1.24/
+    current -> 0.1.24
+```
+
+`.bigenv.json` 记录 installer、binDirs、envs、sourceUrl、sha256 与安装时间；没有该文件的版本目录会标记为「外部目录」，体检时只提示、不自动删除。
+
+## 验证
+
+```powershell
+# 终端 1：起窗口
+$env:ELECTRON_RUN_AS_NODE=$null
+npx electron . --remote-debugging-port=9333
+
+# 终端 2：截图 / 在页面里执行表达式
+node scripts/capture.mjs .tmp/overview.png 9333 --eval "[...document.querySelectorAll('.nav-item')].find(b=>b.textContent.includes('概览'))?.click()"
+node scripts/eval.mjs "await window.bigenv.installed.list()" 9333
+```
+
+已实测走通的链路：`fd 10.5.0`（GitHub Releases zip）与 `lazygit 0.1.24`（tar.gz）完整安装、`current` 切换后 `fd --version` 跟随变化、删除当前版本后无残留链接、`env.ps1` 在新开的 PowerShell 中让 `fd` 可直接调用、项目锁文件识别已装/未装。
+
+## 已知限制
+
+- 仅实现 zip 与 tar.gz；`.tar.xz`、`.tar.zst`、7z 会明确报「暂不支持」。
+- 仅 `conda` 安装器的 SDK（clang、ffmpeg、gcc、python 等）需本机已安装 conda；未内置 conda 引导。
+- 官方安装程序类包（cygwin、msys2、vscode、rustup、miniconda 等）不做静默安装，UI 提示需手动运行。
+- 元数据里 `size` 常为 `0`、部分包没有 `sum`，此时界面不显示大小、下载只校验大小。
+- 主要面向 Windows（junction、PowerShell 注入）；macOS/Linux 的路径与脚本分支已存在但未实机验证。
