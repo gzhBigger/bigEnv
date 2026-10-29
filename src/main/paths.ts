@@ -46,6 +46,8 @@ export interface AppPaths {
   downloadDir: string;
   tempDir: string;
   envDir: string;
+  /** Holds the `bigenv` CLI shim that can be published to PATH. */
+  binDir: string;
   settingsFile: string;
 }
 
@@ -61,6 +63,7 @@ export function appPaths(): AppPaths {
     downloadDir: path.join(dataRoot, 'downloads'),
     tempDir: path.join(dataRoot, 'temp'),
     envDir: path.join(dataRoot, 'env'),
+    binDir: path.join(dataRoot, 'bin'),
     settingsFile: path.join(dataRoot, 'settings.json'),
   };
   return cached;
@@ -79,6 +82,7 @@ export function defaultSettings(): Settings {
     concurrency: 2,
     showUnsupported: true,
     shellEnabled: false,
+    pathMode: 'off',
   };
 }
 

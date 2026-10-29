@@ -3,6 +3,7 @@ import type {
   HealthReport,
   InstallRecord,
   JobState,
+  PathMode,
   ProjectInfo,
   SdkSummary,
   Settings,
@@ -51,6 +52,7 @@ interface AppState {
   lockProject(versions: Record<string, string>): Promise<void>;
   loadShell(): Promise<void>;
   toggleShell(enabled: boolean): Promise<void>;
+  setPathMode(mode: PathMode): Promise<void>;
   scanHealth(): Promise<void>;
   cleanHealth(options: { cache?: boolean; orphans?: boolean }): Promise<void>;
   notify(text: string, kind?: 'ok' | 'err'): void;
@@ -252,6 +254,25 @@ export const useApp = create<AppState>((set, get) => ({
       get().notify(enabled ? '已注入 Shell 配置' : '已移除 Shell 配置');
     } catch (error) {
       get().notify(`操作失败：${(error as Error).message}`, 'err');
+    }
+  },
+
+  async setPathMode(mode) {
+    set({ busy: 'path' });
+    try {
+      const shell = await bridge.env.setPathMode(mode);
+      set({ shell });
+      const settings = await bridge.settings.get();
+      set({ settings });
+      get().notify(
+        mode === 'off'
+          ? '已从全局 PATH 移除 bigEnv 条目'
+          : `已写入${mode === 'machine' ? '系统' : '用户'} PATH（新开的终端生效）`,
+      );
+    } catch (error) {
+      get().notify(`写入 PATH 失败：${(error as Error).message}`, 'err');
+    } finally {
+      set({ busy: null });
     }
   },
 

@@ -86,6 +86,14 @@ export function registerIpc(runtime: AppRuntime): void {
     const target = typeof dir === 'string' && dir.trim() ? dir : undefined;
     await runtime.env.openTerminal(target);
   });
+  ipcMain.handle('bigenv:env:setPathMode', async (_event, mode: unknown) => {
+    if (mode !== 'off' && mode !== 'user' && mode !== 'machine') throw new Error('非法的 PATH 模式');
+    // Publish first: a failed write (no admin rights) must not leave the setting out of sync.
+    await runtime.env.setPathMode(mode);
+    const settings = await runtime.applySettings({ pathMode: mode });
+    broadcast('bigenv:settings', settings);
+    return await runtime.env.info();
+  });
 
   ipcMain.handle('bigenv:projects:inspect', async (_event, dir: unknown) => await runtime.projects.inspect(assertDir(dir)));
   ipcMain.handle('bigenv:projects:lock', async (_event, dir: unknown, versions: unknown) => {

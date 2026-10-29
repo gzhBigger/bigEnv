@@ -19,6 +19,8 @@ Status: implemented
 - 项目锁文件名优先 `.bigenv.json`，向后兼容 `bigenv.json` 与 `.vmr.lock`；内容支持三种形状：JSON `{ "node": "24.22.1" }`、值为 `sdk@version` 字符串、或逐行 `sdk@version`。从目标目录向上最多 10 层查找。
 - 项目页只提供两个动作：「按锁文件打开终端」（`openTerminal(dir, overrides)`）与「写入当前环境」（把已安装的 current 版本合入锁文件）。不做全局 `cd` hook——那需要改用户的 shell 函数，副作用远超收益。
 
+> 后续补充：默认仍不改注册表，但新增了可选的全局 PATH 激活（写 `<installRoot>\<sdk>\current` 稳定目录）与独立的 `bigenv` CLI，见 [全局 PATH 激活与 CLI](2026-10-29-global-path-and-cli.md)。
+
 ## Alternatives considered
 
 - **直接写用户级环境变量（`setx` / 注册表）**：实现最短，但卸载/换版本时要反向追踪，失败就留下脏 PATH；也无法表达「不同项目不同版本」。

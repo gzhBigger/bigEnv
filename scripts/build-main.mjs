@@ -31,12 +31,25 @@ const preloadOptions = {
   logLevel: 'info',
 };
 
+/** @type {import('esbuild').BuildOptions} */
+const cliOptions = {
+  entryPoints: [`${srcDir}/cli/index.ts`],
+  outfile: `${outDir}/cli.cjs`,
+  bundle: true,
+  platform: 'node',
+  target: 'node24',
+  format: 'cjs',
+  sourcemap: true,
+  logLevel: 'info',
+};
+
 if (watch) {
   const ctxMain = await context(mainOptions);
   const ctxPreload = await context(preloadOptions);
-  await Promise.all([ctxMain.watch(), ctxPreload.watch()]);
-  console.log('[build-main] watching main/preload…');
+  const ctxCli = await context(cliOptions);
+  await Promise.all([ctxMain.watch(), ctxPreload.watch(), ctxCli.watch()]);
+  console.log('[build-main] watching main/preload/cli…');
 } else {
-  await Promise.all([build(mainOptions), build(preloadOptions)]);
+  await Promise.all([build(mainOptions), build(preloadOptions), build(cliOptions)]);
   console.log('[build-main] done');
 }

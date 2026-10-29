@@ -245,6 +245,7 @@ const DEFAULT_SETTINGS: Settings = {
   concurrency: 2,
   showUnsupported: true,
   shellEnabled: true,
+  pathMode: 'off',
 };
 
 function versionsOf(seed: Seed, installed: InstallRecord[]): VersionOption[] {
@@ -343,6 +344,13 @@ export function createMockBridge(): Bridge {
     enabled: settings.shellEnabled,
     pathEntries: installed.filter((item) => item.current).map((item) => item.path),
     vars: {},
+    pathMode: settings.pathMode,
+    globalEntries: installed.filter((item) => item.current).map((item) => `${settings.installRoot}\\${item.sdk}\\current`),
+    activeScope: settings.pathMode === 'off' ? null : settings.pathMode,
+    conflicts: [],
+    cliBinDir: `${settings.installRoot}\\..\\bigenv\\bin`,
+    cliLauncher: `${settings.installRoot}\\..\\bigenv\\bin\\bigenv.cmd`,
+    cliScript: 'C:\\Program Files\\bigEnv\\resources\\cli.cjs',
   });
 
   const project = (): ProjectInfo => {
@@ -470,6 +478,11 @@ export function createMockBridge(): Bridge {
       },
       openTerminal: async () => {
         await delay(120);
+      },
+      setPathMode: async (mode) => {
+        settings = { ...settings, pathMode: mode };
+        await delay(150);
+        return envInfo();
       },
     },
     projects: {

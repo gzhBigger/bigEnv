@@ -61,6 +61,12 @@
       "package.json",
       "build/icon.png"
     ],
+    "extraResources": [
+      {
+        "from": "out/cli.cjs",
+        "to": "cli.cjs"
+      }
+    ],
     "win": {
       "icon": "build/icon.ico",
       "target": [

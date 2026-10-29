@@ -42,6 +42,7 @@ const bridge: Bridge = {
     enable: () => invoke('bigenv:env:enable'),
     disable: () => invoke('bigenv:env:disable'),
     openTerminal: (dir) => invoke('bigenv:env:openTerminal', dir),
+    setPathMode: (mode) => invoke('bigenv:env:setPathMode', mode),
   },
   projects: {
     inspect: (dir) => invoke('bigenv:projects:inspect', dir),

@@ -12,6 +12,8 @@
 - **安装与切换**：zip / tar.gz 解压安装到 `~/.bigenv/<sdk>/<version>`，`current` 用 Windows junction 指向当前版本；切换只改链接，不复制文件。下载支持断点续传、sha256 校验、并发队列、取消与失败清理。
 - **已安装管理**：版本列表、大小、安装时间、来源；设为当前、打开目录、删除。
 - **Shell 集成**：生成 `env.ps1` / `env.cmd` / `env.sh`，可选在 PowerShell profile 中写入带标记的加载块；关闭时删除标记块。「打开终端」把环境只注入新进程，不动系统环境变量。
+- **全局激活（可选）**：把 `<安装根>\<sdk>\current` 这个稳定入口写进用户或系统 `PATH`，cmd、IDE、AI agent 都能直接拿到；切版本只改 junction，已开终端的下一条命令即生效。会检测「被更靠前的同名程序遮蔽」并点名提示。
+- **`bigenv` CLI**：`bigenv run -- <cmd>` 按项目锁注入并执行、`env` 输出环境、`which` / `list` / `use` 管理版本，供脚本与 AI agent 调用，不要求装 Node。
 - **项目环境**：读取 `.bigenv.json`（兼容 `.vmr.lock`，也支持 `sdk@version` 文本），按锁文件版本打开终端，或把当前环境写回锁文件。
 - **体检与清理**：统计安装占用与下载缓存，找出没有元数据的残留版本目录、失效的 `current` 链接，一键清理缓存或残留目录。
 - 深色界面、零配置可用；元数据源、镜像、代理、并发数、安装根目录都可在设置里改。
@@ -23,6 +25,30 @@
 | Shell 集成 | 体检与清理 |
 | --- | --- |
 | ![Shell 集成](docs/screenshots/environment.png) | ![体检](docs/screenshots/health.png) |
+
+## 激活方式
+
+装好一个版本后，让它对「谁」可见由你决定，默认不碰注册表：
+
+| 方式 | 覆盖范围 | 怎么用 |
+| --- | --- | --- |
+| 项目锁 | 该目录下的子进程 | 写 `.bigenv.json`，在项目页「打开终端」，或 `bigenv run -- <cmd>` |
+| PowerShell 注入 | 新开的 PowerShell | Shell 集成页打开开关，写入 profile 标记块 |
+| 全局 PATH | 整台机器的所有新进程 | Shell 集成页选「用户 PATH」或「系统 PATH」 |
+
+全局 PATH 写入的是稳定目录 `<安装根>\<sdk>\current`（junction），不是带版本号的实体目录——所以切版本不需要改 PATH，也不需要重开已存在的终端（该终端里的下一条命令就会用新版本）。系统 PATH 需要管理员权限，写入失败会原样报错、不改设置。若更靠前的 PATH 里已有同名程序（例如别的版本管理器写进系统 PATH 的 node），页面会用红字点名冲突，bigEnv 不会去改别人的条目。
+
+**CLI**（`%APPDATA%\bigEnv\bin\bigenv.cmd`，选全局 PATH 时自动进入 PATH）：
+
+```powershell
+bigenv list                     # 已安装版本，* 标记当前
+bigenv which node               # 解析到的可执行文件
+bigenv env --json               # 当前（或项目锁）环境，给父进程消费
+bigenv run -- node -v           # 按项目锁注入后执行；无锁则用全部 current
+bigenv use node@24.4.0          # 切换 current
+```
+
+`bigenv run` 会从当前目录向上找 `.bigenv.json` / `bigenv.json` / `.vmr.lock`，所以 AI agent 或构建脚本在项目里直接调它就能拿到正确版本，不需要 UI 或先开终端。
 
 ## 架构
 
@@ -36,10 +62,12 @@ src/
     archive.ts     zip（yauzl）/ tar.gz（tar）解压，防路径穿越
     http.ts        undici 下载（代理、重试、sha256、进度）
     registry.ts    <installRoot>/<sdk>/<version> + current 链接 + .bigenv.json
-    envManager.ts  env 脚本与 profile 标记块、打开注入终端
+    envManager.ts  env 脚本与 profile 标记块、全局 PATH、CLI 启动器
+    globalPath.ts  注册表 PATH 读写、托管条目识别、环境变更广播
     projects.ts    项目锁文件发现与合并写入
     health.ts      占用统计、残留目录、失效链接
     ipc.ts         bigenv:* 通道
+  cli/         独立的 bigenv CLI（不依赖 electron，打包进 resources/cli.cjs）
   preload/     contextBridge 暴露 window.bigenv（Bridge 接口）
   renderer/    React 19 + zustand 界面
   shared/      主进程与渲染进程共享的类型与分类常量
@@ -52,6 +80,8 @@ src/
 - [桌面端的技术栈与主进程分层](.agents/notes/implemented/architecture/2026-10-29-electron-desktop-shell.md)
 - [直接消费 vsources 元数据，不移植 vmr 的 Lua 运行时](.agents/notes/implemented/feature/2026-10-29-vsources-catalog-engine.md)
 - [Shell 注入与项目锁](.agents/notes/implemented/feature/2026-10-29-env-injection-and-project-lock.md)
+- [全局 PATH 激活与 bigenv CLI](.agents/notes/implemented/feature/2026-10-29-global-path-and-cli.md)
+- [打包与图标](.agents/notes/implemented/process/2026-10-29-packaging-and-icon.md)
 - [用 CDP 脚本验证界面](.agents/notes/implemented/process/2026-10-29-verification-harness.md)
 
 ## 开发

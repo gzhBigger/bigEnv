@@ -277,6 +277,7 @@ code,
 .page-head .actions {
   margin-left: auto;
   display: flex;
+  flex: 0 0 auto;
   gap: 8px;
   align-items: center;
 }

@@ -11,6 +11,8 @@ export type InstallerKind =
 
 export type MirrorMode = 'off' | 'cn';
 
+export type PathMode = 'off' | 'user' | 'machine';
+
 export interface Settings {
   /** Directory that holds `<sdk>/<version>` install trees. */
   installRoot: string;
@@ -26,6 +28,8 @@ export interface Settings {
   showUnsupported: boolean;
   /** Whether the PowerShell profile hook is installed. */
   shellEnabled: boolean;
+  /** Where `<installRoot>\\<sdk>\\current` entries are published so every process can see them. */
+  pathMode: PathMode;
 }
 
 export interface SdkSummary {
@@ -107,12 +111,33 @@ export interface EnvInjection {
   vars: Record<string, string>;
 }
 
+export interface PathConflict {
+  sdk: string;
+  /** Directory that bigEnv prepends. */
+  entry: string;
+  /** Executable name that is shadowed, e.g. `node.exe`. */
+  exe: string;
+  /** Earlier PATH directory that wins the lookup. */
+  shadowedBy: string;
+}
+
 export interface ShellInfo {
   envScriptPath: string;
   profilePath: string | null;
   enabled: boolean;
   pathEntries: string[];
   vars: Record<string, string>;
+  pathMode: PathMode;
+  /** Stable `<installRoot>\<sdk>\current` directories published to PATH. */
+  globalEntries: string[];
+  /** Scope that actually carries the entries, null when pathMode is off. */
+  activeScope: 'user' | 'machine' | null;
+  conflicts: PathConflict[];
+  /** Directory holding the `bigenv.cmd` shim, always present. */
+  cliBinDir: string;
+  cliLauncher: string | null;
+  /** Absolute path of the CLI script the shim points at. */
+  cliScript: string;
 }
 
 export interface ProjectLockEntry {
@@ -171,6 +196,7 @@ export interface Bridge {
     enable(): Promise<ShellInfo>;
     disable(): Promise<ShellInfo>;
     openTerminal(dir?: string): Promise<void>;
+    setPathMode(mode: PathMode): Promise<ShellInfo>;
   };
   projects: {
     inspect(dir: string): Promise<ProjectInfo>;

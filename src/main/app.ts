@@ -46,14 +46,16 @@ export class AppRuntime {
         await this.env.refresh();
       },
     });
-    this.catalog.setInstalledProvider(async () => {
-      const index = await this.registry.index();
-      const map = new Map<string, { versions: Set<string>; current: string | null }>();
-      for (const [sdk, records] of index.bySdk) {
-        map.set(sdk, { versions: new Set(records.map((record) => record.version)), current: index.current.get(sdk) ?? null });
-      }
-      return map;
-    });
+    this.catalog.setInstalledProvider(async () => await this.installedSnapshot());
+  }
+
+  private async installedSnapshot(): Promise<Map<string, { versions: Set<string>; current: string | null }>> {
+    const index = await this.registry.index();
+    const map = new Map<string, { versions: Set<string>; current: string | null }>();
+    for (const [sdk, records] of index.bySdk) {
+      map.set(sdk, { versions: new Set(records.map((record) => record.version)), current: index.current.get(sdk) ?? null });
+    }
+    return map;
   }
 
   static async create(): Promise<AppRuntime> {
@@ -73,14 +75,7 @@ export class AppRuntime {
   async refreshCapabilities(): Promise<void> {
     this.caps = await detectCapabilities();
     this.catalog.setCapabilities(this.caps);
-    this.catalog.setInstalledProvider(async () => {
-      const index = await this.registry.index();
-      const map = new Map<string, { versions: Set<string>; current: string | null }>();
-      for (const [sdk, records] of index.bySdk) {
-        map.set(sdk, { versions: new Set(records.map((record) => record.version)), current: index.current.get(sdk) ?? null });
-      }
-      return map;
-    });
+    this.catalog.setInstalledProvider(async () => await this.installedSnapshot());
   }
 
   async applySettings(patch: Partial<Settings>): Promise<Settings> {
@@ -98,6 +93,9 @@ export class AppRuntime {
     }
     if (previous.shellEnabled && !next.shellEnabled) {
       await this.env.disable();
+    }
+    if (previous.pathMode !== next.pathMode && next.pathMode === 'off') {
+      await this.env.setPathMode('off');
     }
     await this.env.refresh();
     return next;

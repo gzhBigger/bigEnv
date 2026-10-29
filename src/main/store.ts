@@ -17,6 +17,7 @@ function sanitize(input: Partial<Settings>, base: Settings): Settings {
   merged.concurrency = Math.min(6, Math.max(1, Math.round(Number(merged.concurrency) || 2)));
   merged.showUnsupported = merged.showUnsupported !== false;
   merged.shellEnabled = merged.shellEnabled === true;
+  merged.pathMode = merged.pathMode === 'user' || merged.pathMode === 'machine' ? merged.pathMode : 'off';
   return merged;
 }
 

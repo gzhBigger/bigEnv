@@ -1,13 +1,22 @@
 import type { JSX } from 'react';
-import { ClipboardCopy, FileCode2, TerminalSquare } from 'lucide-react';
+import { AlertTriangle, ClipboardCopy, FileCode2, TerminalSquare } from 'lucide-react';
+import type { PathMode } from '../../shared/types';
 import { bridge } from '../lib/bridge';
 import { useApp } from '../store';
 import { formatBytes } from '../lib/format';
+
+const PATH_MODES: { id: PathMode; label: string }[] = [
+  { id: 'off', label: '关闭' },
+  { id: 'user', label: '用户 PATH' },
+  { id: 'machine', label: '系统 PATH' },
+];
 
 export function Environment(): JSX.Element {
   const shell = useApp((state) => state.shell);
   const installed = useApp((state) => state.installed);
   const toggleShell = useApp((state) => state.toggleShell);
+  const setPathMode = useApp((state) => state.setPathMode);
+  const busy = useApp((state) => state.busy);
   const notify = useApp((state) => state.notify);
 
   const copy = async (text: string): Promise<void> => {
@@ -25,7 +34,7 @@ export function Environment(): JSX.Element {
         <div>
           <h1>Shell 集成</h1>
           <p>
-            bigEnv 不修改系统环境变量，而是生成 PowerShell / CMD / Bash 初始化脚本，并可选择在 PowerShell 配置文件中写入一段带标记的加载块。
+            默认不触碰注册表：用初始化脚本、项目锁或 CLI 提供环境；需要全局生效时再选择把稳定入口写进用户/系统 PATH。
           </p>
         </div>
         <div className="actions">
@@ -33,6 +42,74 @@ export function Environment(): JSX.Element {
             <TerminalSquare size={13} /> 打开终端
           </button>
         </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 14 }}>
+        <div className="card-head">
+          <h2>全局 PATH 激活</h2>
+          <span className="meta">
+            {shell?.activeScope === 'machine'
+              ? '已写入系统 PATH'
+              : shell?.activeScope === 'user'
+                ? '已写入用户 PATH'
+                : '当前未写入'}
+          </span>
+        </div>
+        <div className="spread" style={{ alignItems: 'flex-start' }}>
+          <div style={{ fontSize: 12.5, color: 'var(--muted)', maxWidth: 520 }}>
+            把 <code>&lt;安装目录&gt;\&lt;sdk&gt;\current</code> 写进 PATH，任何程序（cmd、IDE、AI agent）都能直接用；
+            切换版本只换 junction 目标，已打开的终端下一条命令就生效。系统 PATH 需要管理员权限。
+          </div>
+          <div className="tabbar">
+            {PATH_MODES.map((mode) => (
+              <button
+                key={mode.id}
+                type="button"
+                className={shell?.pathMode === mode.id ? 'active' : ''}
+                disabled={busy === 'path'}
+                onClick={() => void setPathMode(mode.id)}
+              >
+                {mode.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="divider" />
+        {(!shell || shell.globalEntries.length === 0) && <div className="empty">还没有可发布的运行时。</div>}
+        {shell?.globalEntries.map((entry) => (
+          <div key={entry} className="row" style={{ padding: '4px 0', fontSize: 12 }}>
+            <span className="tag green">PATH</span>
+            <span className="mono" style={{ fontSize: 11.5, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {entry}
+            </span>
+          </div>
+        ))}
+        {shell && shell.conflicts.length > 0 && (
+          <>
+            <div className="divider" />
+            {shell.conflicts.map((conflict) => (
+              <div key={`${conflict.sdk}-${conflict.exe}`} className="row" style={{ padding: '4px 0', fontSize: 12 }}>
+                <AlertTriangle size={13} color="var(--warn, #d6a84a)" />
+                <span>
+                  <b>{conflict.exe}</b> 被更靠前的 <span className="mono">{conflict.shadowedBy}</span> 抢先，bigEnv 的 {conflict.sdk} 不会生效
+                </span>
+              </div>
+            ))}
+          </>
+        )}
+        <div className="divider" />
+        <dl className="kv">
+          <dt>CLI</dt>
+          <dd className="mono" style={{ fontSize: 11.5 }}>{shell?.cliLauncher ?? '未生成'}</dd>
+          <dt>用法</dt>
+          <dd style={{ fontSize: 12 }}>
+            {['bigenv run -- node -v', 'bigenv env --json', 'bigenv use node@24.4.0'].map((line) => (
+              <div key={line} style={{ padding: '2px 0' }}>
+                <code>{line}</code>
+              </div>
+            ))}
+          </dd>
+        </dl>
       </div>
 
       <div className="grid c2">
