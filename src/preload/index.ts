@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { Bridge, InstallRecord, JobState, ProjectInfo, Settings, SdkSummary } from '../shared/types';
+import type { Bridge, InstallRecord, JobState, ProjectInfo, Settings, SdkSummary, WindowState } from '../shared/types';
 
 function invoke<T>(channel: string, ...args: unknown[]): Promise<T> {
   return ipcRenderer.invoke(channel, ...args) as Promise<T>;
@@ -59,6 +59,13 @@ const bridge: Bridge = {
     openPath: (target) => invoke('bigenv:system:openPath', target),
     openExternal: (url) => invoke('bigenv:system:openExternal', url),
     applyTheme: (theme) => invoke('bigenv:system:theme', theme),
+  },
+  window: {
+    minimize: () => ipcRenderer.send('bigenv:window:control', 'minimize'),
+    toggleMaximize: () => ipcRenderer.send('bigenv:window:control', 'toggle-maximize'),
+    close: () => ipcRenderer.send('bigenv:window:control', 'close'),
+    state: () => ipcRenderer.sendSync('bigenv:window:state:sync') as WindowState,
+    onState: subscribe<WindowState>('bigenv:window:state'),
   },
   health: {
     scan: () => invoke('bigenv:health:scan'),

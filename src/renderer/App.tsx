@@ -1,4 +1,5 @@
 import type { JSX } from 'react';
+import type { MouseEvent as ReactMouseEvent } from 'react';
 import { useEffect } from 'react';
 import { isDesktop } from './lib/bridge';
 import { useApp, type PageKey } from './store';
@@ -6,6 +7,7 @@ import { Sidebar } from './components/Sidebar';
 import { JobDock } from './components/JobDock';
 import { SdkSheet } from './components/SdkSheet';
 import { ThemeSwitch } from './components/ThemeSwitch';
+import { WindowControls } from './components/WindowControls';
 import { Toast } from './components/Toast';
 import { Overview } from './pages/Overview';
 import { Catalog } from './pages/Catalog';
@@ -56,11 +58,17 @@ export function App(): JSX.Element {
     void init();
   }, [init]);
 
+  // Frameless windows lose the OS double-click-to-maximize, so restore it here.
+  const onTitlebarDoubleClick = (event: ReactMouseEvent<HTMLDivElement>): void => {
+    if ((event.target as HTMLElement).closest('button')) return;
+    window.bigenv?.window.toggleMaximize();
+  };
+
   return (
     <div className="app">
       <Sidebar />
       <div className="main">
-        <div className="titlebar">
+        <div className="titlebar" onDoubleClick={onTitlebarDoubleClick}>
           <span className="crumb">bigEnv</span>
           <span className="crumb" style={{ color: 'var(--border-strong)' }}>
             /
@@ -69,8 +77,9 @@ export function App(): JSX.Element {
             {TITLES[page]}
           </span>
           <span className="spacer" />
-          <span className="hint">{isDesktop ? '桌面模式' : '浏览器预览（模拟数据）'}</span>
+          {isDesktop ? null : <span className="hint">浏览器预览（模拟数据）</span>}
           <ThemeSwitch />
+          <WindowControls />
         </div>
         <div className="scroll">
           <PageContent page={page} />

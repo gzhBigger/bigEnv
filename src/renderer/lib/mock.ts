@@ -543,6 +543,13 @@ export function createMockBridge(): Bridge {
       openExternal: async () => undefined,
       applyTheme: async () => undefined,
     },
+    window: {
+      minimize: () => undefined,
+      toggleMaximize: () => undefined,
+      close: () => undefined,
+      state: () => ({ maximized: false, focused: true }),
+      onState: () => () => undefined,
+    },
     health: {
       scan: async () => {
         await delay(200);

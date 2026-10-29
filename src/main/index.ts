@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { AppRuntime } from './app';
 import { elevatedAction, runElevatedPathWrite } from './elevated';
-import { paintTitleBars, registerIpc } from './ipc';
+import { applyWindowChrome, emitWindowState, registerIpc } from './ipc';
 import { createLogger } from './logger';
 import { getSettings } from './store';
 
@@ -73,8 +73,10 @@ function createWindow(): void {
     minHeight: 680,
     show: false,
     backgroundColor: '#0b0f14',
-    titleBarStyle: 'hidden',
-    titleBarOverlay: { color: '#0b0f14', symbolColor: '#c8d4e4', height: 44 },
+    // macOS keeps its traffic lights; Windows/Linux get renderer-drawn buttons.
+    ...(process.platform === 'darwin'
+      ? { titleBarStyle: 'hiddenInset' as const }
+      : { frame: false, roundedCorners: true }),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -83,7 +85,12 @@ function createWindow(): void {
     },
   });
 
-  paintTitleBars(getSettings().theme);
+  applyWindowChrome(getSettings().theme);
+  const emit = (): void => emitWindowState(mainWindow as BrowserWindow);
+  mainWindow.on('maximize', emit);
+  mainWindow.on('unmaximize', emit);
+  mainWindow.on('focus', emit);
+  mainWindow.on('blur', emit);
 
   mainWindow.once('ready-to-show', () => mainWindow?.show());
   mainWindow.on('closed', () => {

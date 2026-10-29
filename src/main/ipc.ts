@@ -1,5 +1,5 @@
 import { BrowserWindow, dialog, ipcMain, nativeTheme, shell } from 'electron';
-import type { Settings, ThemeMode } from '../shared/types';
+import type { Settings, ThemeMode, WindowState } from '../shared/types';
 import type { AppRuntime } from './app';
 import { createLogger } from './logger';
 import { appPaths } from './paths';
@@ -7,19 +7,23 @@ import { getSettings, updateSettings } from './store';
 
 const log = createLogger('ipc');
 
-/** Native window controls live outside the page, so the palette has to be pushed to them. */
-const TITLEBAR_COLORS = {
-  dark: { color: '#0b0f14', symbolColor: '#c8d4e4', height: 44 },
-  light: { color: '#ffffff', symbolColor: '#1f2937', height: 44 },
-} as const;
-
-export function paintTitleBars(theme: ThemeMode): void {
+/** The window is frameless, so only the base colour has to follow the palette. */
+export function applyWindowChrome(theme: ThemeMode): void {
   const dark = theme === 'dark' || (theme === 'system' && nativeTheme.shouldUseDarkColors);
   for (const win of BrowserWindow.getAllWindows()) {
     if (win.isDestroyed()) continue;
-    win.setTitleBarOverlay(dark ? TITLEBAR_COLORS.dark : TITLEBAR_COLORS.light);
     win.setBackgroundColor(dark ? '#0a0e13' : '#f4f6fa');
   }
+}
+
+export function windowStateOf(win: BrowserWindow): WindowState {
+  return { maximized: win.isMaximized(), focused: win.isFocused() };
+}
+
+/** Push the current maximize/focus state so the custom buttons can redraw. */
+export function emitWindowState(win: BrowserWindow): void {
+  if (win.isDestroyed()) return;
+  win.webContents.send('bigenv:window:state', windowStateOf(win));
 }
 
 const SDK_PATTERN = /^[\w.+-]+$/;
@@ -197,11 +201,25 @@ export function registerIpc(runtime: AppRuntime): void {
   });
   ipcMain.handle('bigenv:system:theme', async (_event, theme: unknown) => {
     if (theme !== 'system' && theme !== 'light' && theme !== 'dark') throw new Error('非法的主题');
-    paintTitleBars(theme);
+    applyWindowChrome(theme);
   });
   // `system` mode must follow the OS live, not only when the user toggles the switch.
   nativeTheme.on('updated', () => {
-    if (getSettings().theme === 'system') paintTitleBars('system');
+    if (getSettings().theme === 'system') applyWindowChrome('system');
+  });
+
+  ipcMain.on('bigenv:window:control', (event, action: unknown) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win) return;
+    if (action === 'minimize') win.minimize();
+    else if (action === 'toggle-maximize') {
+      if (win.isMaximized()) win.unmaximize();
+      else win.maximize();
+    } else if (action === 'close') win.close();
+  });
+  ipcMain.on('bigenv:window:state:sync', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    event.returnValue = win ? windowStateOf(win) : { maximized: false, focused: false };
   });
 
   ipcMain.handle('bigenv:health:scan', async () => await runtime.health.scan());

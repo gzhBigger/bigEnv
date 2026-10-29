@@ -1,3 +1,17 @@
+export interface WindowState {
+  maximized: boolean;
+  focused: boolean;
+}
+
+/** Custom window buttons, since the frameless title bar draws its own. */
+export interface WindowBridge {
+  minimize(): void;
+  toggleMaximize(): void;
+  close(): void;
+  state(): WindowState;
+  onState(cb: (state: WindowState) => void): () => void;
+}
+
 /** Shared contracts between the Electron main process, the preload bridge and the renderer. */
 
 export type InstallerKind =
@@ -231,6 +245,8 @@ export interface Bridge {
     /** Repaints the native title bar buttons so they stay legible on the active palette. */
     applyTheme(theme: ThemeMode): Promise<void>;
   };
+  /** Frameless window controls drawn by the renderer. */
+  window: WindowBridge;
   health: {
     scan(): Promise<HealthReport>;
     clean(options: { cache?: boolean; orphans?: boolean }): Promise<HealthReport>;

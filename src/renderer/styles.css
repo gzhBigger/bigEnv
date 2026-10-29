@@ -235,7 +235,7 @@ code,
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 0 150px 0 24px;
+  padding: 0 8px 0 24px;
   -webkit-app-region: drag;
   border-bottom: 1px solid light-dark(rgba(16, 24, 40, 0.08), rgba(30, 42, 56, 0.6));
 }
@@ -1218,4 +1218,55 @@ code,
 .theme-btn.on {
   background: var(--accent-soft);
   color: var(--accent);
+}
+
+/* ------------------------------------------------ custom window controls */
+
+.win-controls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 2px;
+  -webkit-app-region: no-drag;
+}
+
+.win-btn {
+  width: 30px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.win-btn:hover {
+  background: light-dark(rgba(16, 24, 40, 0.07), rgba(255, 255, 255, 0.08));
+  color: var(--text);
+}
+
+.win-btn:active {
+  background: light-dark(rgba(16, 24, 40, 0.12), rgba(255, 255, 255, 0.13));
+}
+
+.win-btn.close:hover {
+  background: #e5484d;
+  color: #fff;
+}
+
+.win-btn.close:active {
+  background: #c93a3f;
+  color: #fff;
+}
+
+.win-btn {
+  color: light-dark(#3d4a5c, #b3c2d4);
+  opacity: 0.78;
+}
+
+.win-btn:hover {
+  opacity: 1;
 }
