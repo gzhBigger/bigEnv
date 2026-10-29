@@ -1,6 +1,10 @@
+<p align="center">
+  <img src="build/logo-mark.png" width="96" height="96" alt="bigEnv" />
+</p>
+
 # bigEnv
 
-桌面端运行环境管理器：把 Node.js、Python、Go、JDK、Rust、.NET、Zig 这类语言运行时与命令行工具收进一个窗口，负责**发现版本 → 下载校验 → 解压安装 → 切换当前版本 → 注入 Shell → 按项目锁定版本 → 体检清理**。
+桌面端运行环境管理器：把 Node.js、Python、Go、JDK、Rust、.NET、Zig 这类语言运行时与命令行工具收进一个窗口，负责**发现版本 → 下载校验 → 解压安装 → 切换当前版本 → 全局 PATH 或项目锁 → 体检清理**。
 
 灵感与元数据来自 [gvcgo/version-manager](https://github.com/gvcgo/version-manager)（vmr），数据源为 [gvcgo/vsources](https://github.com/gvcgo/vsources)。
 

@@ -26,7 +26,7 @@ export function Overview(): JSX.Element {
       <div className="page-head">
         <div>
           <h1>概览</h1>
-          <p>统一管理本机的语言运行时与命令行工具：安装、切换、锁定项目版本，并让 Shell 自动获得正确的 PATH。</p>
+          <p>统一管理本机的语言运行时与命令行工具：安装、切换、按项目锁定版本，并按需写进全局 PATH。</p>
         </div>
         <div className="actions">
           <button
@@ -166,8 +166,8 @@ export function Overview(): JSX.Element {
                 <TerminalSquare size={15} />
               </span>
               <div>
-                <div className="sdk-name">打开已注入环境的终端</div>
-                <div className="sdk-id">PATH 自动指向当前版本</div>
+                <div className="sdk-name">打开临时环境终端</div>
+                <div className="sdk-id">只在这个窗口里注入当前版本</div>
               </div>
             </div>
             <div className="sdk-desc">新窗口继承 bigEnv 的环境变量，无需修改系统设置。</div>

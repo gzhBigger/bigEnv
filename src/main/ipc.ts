@@ -1,4 +1,4 @@
-import { BrowserWindow, dialog, ipcMain, nativeTheme, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell } from 'electron';
 import type { Settings, ThemeMode, WindowState } from '../shared/types';
 import type { AppRuntime } from './app';
 import { createLogger } from './logger';
@@ -228,7 +228,7 @@ export function registerIpc(runtime: AppRuntime): void {
 
   ipcMain.on('bigenv:runtime:sync', (event) => {
     event.returnValue = {
-      version: process.env.npm_package_version ?? '0.1.0',
+      version: app.getVersion(),
       platform: process.platform,
       arch: process.arch,
       dataRoot: appPaths().dataRoot,
@@ -237,7 +237,7 @@ export function registerIpc(runtime: AppRuntime): void {
   });
 
   ipcMain.handle('bigenv:runtime:info', async () => ({
-    version: process.env.npm_package_version ?? '0.1.0',
+    version: app.getVersion(),
     platform: process.platform,
     arch: process.arch,
     dataRoot: appPaths().dataRoot,

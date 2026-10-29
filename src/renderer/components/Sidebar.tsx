@@ -7,9 +7,10 @@ import {
   ListChecks,
   Settings2,
   Stethoscope,
-  TerminalSquare,
   type LucideIcon,
 } from 'lucide-react';
+import { BrandMark } from './BrandMark';
+import { bridge } from '../lib/bridge';
 import { useApp, type PageKey } from '../store';
 
 interface NavEntry {
@@ -60,10 +61,10 @@ export function Sidebar(): JSX.Element {
     <aside className="sidebar">
       <div className="brand">
         <span className="brand-mark">
-          <TerminalSquare size={13} color="#04101f" strokeWidth={2.4} />
+          <BrandMark size={18} />
         </span>
         <span className="brand-name">bigEnv</span>
-        <span className="brand-sub">0.1.0</span>
+        <span className="brand-sub">{bridge.runtime.version}</span>
       </div>
       <nav className="nav">
         <div className="nav-label">工作区</div>

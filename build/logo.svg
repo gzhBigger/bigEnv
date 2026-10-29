@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 200" width="760" height="200" role="img" aria-label="bigEnv">
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1a2634"/>
+      <stop offset="1" stop-color="#080d13"/>
+    </linearGradient>
+    <linearGradient id="b1" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#8ec6ff"/>
+      <stop offset="1" stop-color="#4c9aff"/>
+    </linearGradient>
+    <linearGradient id="b2" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#5fb2ff"/>
+      <stop offset="1" stop-color="#3f8fe8"/>
+    </linearGradient>
+    <linearGradient id="b3" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#35d0a5"/>
+      <stop offset="1" stop-color="#17a97f"/>
+    </linearGradient>
+    <linearGradient id="word" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#eaf2fb"/>
+      <stop offset="1" stop-color="#b9cee6"/>
+    </linearGradient>
+  </defs>
+
+  <g transform="translate(0, 0) scale(0.35)">
+    <rect width="512" height="512" rx="116" fill="url(#tile)"/>
+    <rect x="14" y="14" width="484" height="484" rx="104" fill="none" stroke="#4c9aff" stroke-opacity="0.32" stroke-width="8"/>
+    <rect x="112" y="150" width="288" height="58" rx="29" fill="url(#b1)"/>
+    <rect x="112" y="232" width="232" height="58" rx="29" fill="url(#b2)"/>
+    <rect x="112" y="314" width="168" height="58" rx="29" fill="url(#b3)"/>
+    <circle cx="356" cy="343" r="29" fill="#35d0a5"/>
+    <circle cx="356" cy="343" r="13" fill="#08111a"/>
+  </g>
+
+  <text x="216" y="122" font-family="'Segoe UI Semibold','Segoe UI',system-ui,-apple-system,sans-serif"
+        font-size="76" font-weight="600" letter-spacing="-1.5" fill="url(#word)">bigEnv</text>
+  <text x="219" y="158" font-family="'Segoe UI',system-ui,-apple-system,sans-serif"
+        font-size="20" letter-spacing="4.2" fill="#7c93ad">RUNTIME ENVIRONMENTS</text>
+</svg>

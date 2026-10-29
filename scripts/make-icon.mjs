@@ -1,9 +1,13 @@
-// 生成应用图标：用无边框透明窗口渲染一张 512×512 的品牌图，
-// 再用 nativeImage 缩放出多尺寸 PNG，最后打包成 Windows 需要的 ICO。
+// 生成品牌资源：
+//   build/icon.png / build/icon.ico —— 应用图标（Windows 打包用）
+//   build/logo.png               —— 横向品牌组合（README / 发布说明用）
+// 用无边框透明窗口渲染内联 HTML 与 SVG，再交给 nativeImage 缩放。
 // 用法：npx electron scripts/make-icon.mjs
 import { app, BrowserWindow, nativeImage } from 'electron';
 import { mkdir, writeFile } from 'node:fs/promises';
+import { writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const OUT_DIR = path.join(ROOT, 'build');
@@ -12,23 +16,20 @@ const SIZES = [256, 128, 64, 48, 32, 16];
 const HTML = `<!doctype html><html><head><meta charset="utf-8"><style>
   html, body { margin: 0; width: 512px; height: 512px; background: transparent; overflow: hidden; }
   .tile {
-    width: 512px; height: 512px; border-radius: 112px;
-    background: linear-gradient(150deg, #17222e 0%, #0a0f15 100%);
-    box-shadow: inset 0 0 0 8px rgba(76, 154, 255, 0.35);
-    display: flex; align-items: center; justify-content: center; position: relative;
+    width: 512px; height: 512px; border-radius: 116px;
+    background: linear-gradient(135deg, #1a2634 0%, #080d13 100%);
+    position: relative;
   }
-  .glyph {
-    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-    font-weight: 700; font-size: 330px; line-height: 1;
-    background: linear-gradient(150deg, #6db3ff 10%, #35d0a5 90%);
-    -webkit-background-clip: text; background-clip: text; color: transparent;
-    transform: translateY(-14px);
-  }
-  .dot {
-    position: absolute; right: 96px; bottom: 100px;
-    width: 54px; height: 54px; border-radius: 50%; background: #35d0a5;
-  }
-</style></head><body><div class="tile"><div class="glyph">b</div><div class="dot"></div></div></body></html>`;
+  .ring { position: absolute; inset: 14px; border-radius: 104px; border: 8px solid rgba(76,154,255,.32); }
+  .bar { position: absolute; left: 112px; height: 58px; border-radius: 29px; }
+  .b1 { top: 150px; width: 288px; background: linear-gradient(90deg, #8ec6ff, #4c9aff); }
+  .b2 { top: 232px; width: 232px; background: linear-gradient(90deg, #5fb2ff, #3f8fe8); }
+  .b3 { top: 314px; width: 168px; background: linear-gradient(90deg, #35d0a5, #17a97f); }
+  .dot { position: absolute; left: 327px; top: 314px; width: 58px; height: 58px; border-radius: 50%; background: #35d0a5; }
+  .dot::after { content: ''; position: absolute; left: 16px; top: 16px; width: 26px; height: 26px; border-radius: 50%; background: #08111a; }
+</style></head><body><div class="tile"><div class="ring"></div>
+  <div class="bar b1"></div><div class="bar b2"></div><div class="bar b3"></div><div class="dot"></div>
+</div></body></html>`;
 
 /** 把若干张 PNG 打包成 ICO（Vista+ 支持 PNG 压缩条目）。 */
 export function buildIco(images) {
@@ -55,22 +56,33 @@ export function buildIco(images) {
   return Buffer.concat([header, ...entries, ...images.map((i) => i.png)]);
 }
 
-async function main() {
-  await app.whenReady();
+async function render({ width, height, url, settle = 400 }) {
   const win = new BrowserWindow({
-    width: 512,
-    height: 512,
+    width,
+    height,
     show: false,
     frame: false,
     transparent: true,
     backgroundColor: '#00000000',
     webPreferences: { offscreen: true },
   });
-  await win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(HTML));
-  await new Promise((resolve) => setTimeout(resolve, 400));
-
+  await win.loadURL(url);
+  await new Promise((resolve) => setTimeout(resolve, settle));
   const shot = await win.webContents.capturePage();
-  const master = shot.getSize().width >= 512 ? shot : shot.resize({ width: 512, height: 512 });
+  win.destroy();
+  return shot;
+}
+
+app.on('window-all-closed', () => {
+  // 默认行为是关掉最后一个窗口就退出；这里要在多张渲染之间保持进程存活。
+});
+
+async function main() {
+  await app.whenReady();
+  await mkdir(OUT_DIR, { recursive: true });
+
+  const tile = await render({ width: 512, height: 512, url: 'data:text/html;charset=utf-8,' + encodeURIComponent(HTML) });
+  const master = tile.getSize().width >= 512 ? tile : tile.resize({ width: 512, height: 512 });
   const masterPng = master.toPNG();
 
   const images = [];
@@ -79,15 +91,40 @@ async function main() {
     images.push({ size, png: resized.toPNG() });
   }
 
-  await mkdir(OUT_DIR, { recursive: true });
   await writeFile(path.join(OUT_DIR, 'icon.png'), masterPng);
-  await writeFile(path.join(OUT_DIR, 'icon.ico'), buildIco(images));
-  console.log(`[make-icon] wrote build/icon.png (${masterPng.length} bytes) and build/icon.ico (${images.length} sizes)`);
-  win.destroy();
+  writeFileSync(path.join(OUT_DIR, 'icon.ico'), buildIco(images));
+
+  try {
+    const logo = await render({
+      width: 760,
+      height: 200,
+      url: pathToFileURL(path.join(OUT_DIR, 'logo.svg')).toString(),
+      settle: 700,
+    });
+    const logo2x = logo.resize({ width: 1520, height: 400, quality: 'best' });
+    const logoPng = logo2x.toPNG();
+    writeFileSync(path.join(OUT_DIR, 'logo.png'), logoPng);
+
+    const mark = await render({
+      width: 512,
+      height: 512,
+      url: pathToFileURL(path.join(OUT_DIR, 'logo-mark.svg')).toString(),
+      settle: 700,
+    });
+    writeFileSync(path.join(OUT_DIR, 'logo-mark.png'), mark.toPNG());
+
+    console.log(`[make-icon] icon.png ${masterPng.length}B, icon.ico ${images.length} sizes, logo.png ${logoPng.length}B`);
+  } catch (err) {
+    writeFileSync(path.join(OUT_DIR, 'logo-error.txt'), `${err?.stack ?? err}\n`, 'utf8');
+    console.log(`[make-icon] icon.png ${masterPng.length}B, icon.ico ${images.length} sizes; logo render failed`);
+  }
   app.quit();
 }
 
-main().catch((err) => {
+main().catch(async (err) => {
+  await writeFile(path.join(OUT_DIR, 'icon-error.txt'), `${err?.stack ?? err}\n`, 'utf8').catch(() => undefined);
   console.error('[make-icon] failed', err);
   app.exit(1);
 });
+
+
