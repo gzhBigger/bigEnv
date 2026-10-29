@@ -30,6 +30,8 @@ export interface Settings {
   shellEnabled: boolean;
   /** Where `<installRoot>\\<sdk>\\current` entries are published so every process can see them. */
   pathMode: PathMode;
+  /** Project directories managed on the projects page (absolute paths). */
+  projects: string[];
 }
 
 export interface SdkSummary {
@@ -149,6 +151,8 @@ export interface ProjectLockEntry {
 
 export interface ProjectInfo {
   dir: string;
+  /** Directory name, used as the display label. */
+  name: string;
   lockFile: string | null;
   versions: Record<string, string>;
   entries: ProjectLockEntry[];
@@ -181,6 +185,8 @@ export interface Bridge {
     start(sdkId: string, version: string): Promise<JobState>;
     cancel(jobId: string): Promise<void>;
     list(): Promise<JobState[]>;
+    /** Drop finished (done/error/canceled) jobs from the queue. */
+    clear(): Promise<void>;
   };
   installed: {
     list(): Promise<InstallRecord[]>;
@@ -199,8 +205,14 @@ export interface Bridge {
     setPathMode(mode: PathMode): Promise<ShellInfo>;
   };
   projects: {
+    /** All managed projects, inspected (lock file contents included). */
+    list(): Promise<ProjectInfo[]>;
+    add(dir: string): Promise<ProjectInfo[]>;
+    remove(dir: string): Promise<ProjectInfo[]>;
     inspect(dir: string): Promise<ProjectInfo>;
-    lock(dir: string, versions: Record<string, string>): Promise<ProjectInfo>;
+    /** Replace the project's lock file with exactly these entries. */
+    save(dir: string, versions: Record<string, string>): Promise<ProjectInfo>;
+    openTerminal(dir: string): Promise<void>;
   };
   system: {
     pickDirectory(): Promise<string | null>;

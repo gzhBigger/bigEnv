@@ -52,6 +52,9 @@ export function registerIpc(runtime: AppRuntime): void {
     await runtime.jobs.cancel(id);
   });
   ipcMain.handle('bigenv:installs:list', async () => runtime.jobs.list());
+  ipcMain.handle('bigenv:installs:clear', async () => {
+    runtime.jobs.clear();
+  });
 
   ipcMain.handle('bigenv:installed:list', async () => await runtime.registry.list());
   ipcMain.handle('bigenv:installed:use', async (_event, sdk: unknown, version: unknown) => {
@@ -95,17 +98,37 @@ export function registerIpc(runtime: AppRuntime): void {
     return await runtime.env.info();
   });
 
-  ipcMain.handle('bigenv:projects:inspect', async (_event, dir: unknown) => await runtime.projects.inspect(assertDir(dir)));
-  ipcMain.handle('bigenv:projects:lock', async (_event, dir: unknown, versions: unknown) => {
+  const readVersions = (versions: unknown): Record<string, string> => {
     if (!versions || typeof versions !== 'object') throw new Error('非法的版本集合');
     const map: Record<string, string> = {};
     for (const [sdk, version] of Object.entries(versions as Record<string, unknown>)) {
-      if (typeof version !== 'string') continue;
+      if (typeof version !== 'string' || !version) continue;
       map[assertSdk(sdk)] = assertVersion(version);
     }
-    const info = await runtime.projects.lock(assertDir(dir), map);
-    await runtime.env.refresh();
+    return map;
+  };
+
+  ipcMain.handle('bigenv:projects:list', async () => await runtime.listProjects());
+  ipcMain.handle('bigenv:projects:add', async (_event, dir: unknown) => {
+    const list = await runtime.addProject(assertDir(dir));
+    broadcast('bigenv:settings', getSettings());
+    return list;
+  });
+  ipcMain.handle('bigenv:projects:remove', async (_event, dir: unknown) => {
+    const list = await runtime.removeProject(assertDir(dir));
+    broadcast('bigenv:settings', getSettings());
+    return list;
+  });
+  ipcMain.handle('bigenv:projects:inspect', async (_event, dir: unknown) => await runtime.projects.inspect(assertDir(dir)));
+  ipcMain.handle('bigenv:projects:save', async (_event, dir: unknown, versions: unknown) => {
+    const info = await runtime.projects.save(assertDir(dir), readVersions(versions));
     return info;
+  });
+  ipcMain.handle('bigenv:projects:openTerminal', async (_event, dir: unknown) => {
+    const target = assertDir(dir);
+    const info = await runtime.projects.inspect(target);
+    const overrides = new Map<string, string>(Object.entries(info.versions));
+    await runtime.env.openTerminal(target, overrides);
   });
 
   ipcMain.handle('bigenv:system:pickDirectory', async () => {

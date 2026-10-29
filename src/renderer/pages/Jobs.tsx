@@ -6,7 +6,9 @@ import { formatSpeed, percent, phaseText } from '../lib/format';
 export function Jobs(): JSX.Element {
   const jobs = useApp((state) => state.jobs);
   const cancelJob = useApp((state) => state.cancelJob);
+  const clearJobs = useApp((state) => state.clearJobs);
   const refreshJobs = useApp((state) => state.refreshJobs);
+  const finished = jobs.filter((job) => ['done', 'error', 'canceled'].includes(job.phase)).length;
 
   return (
     <>
@@ -18,6 +20,9 @@ export function Jobs(): JSX.Element {
         <div className="actions">
           <button type="button" className="btn" onClick={() => void refreshJobs()}>
             刷新
+          </button>
+          <button type="button" className="btn ghost" disabled={finished === 0} onClick={() => void clearJobs()}>
+            清空已完成（{finished}）
           </button>
         </div>
       </div>

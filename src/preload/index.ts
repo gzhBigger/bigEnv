@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { Bridge, InstallRecord, JobState, Settings, SdkSummary } from '../shared/types';
+import type { Bridge, InstallRecord, JobState, ProjectInfo, Settings, SdkSummary } from '../shared/types';
 
 function invoke<T>(channel: string, ...args: unknown[]): Promise<T> {
   return ipcRenderer.invoke(channel, ...args) as Promise<T>;
@@ -27,6 +27,7 @@ const bridge: Bridge = {
     start: (sdkId, version) => invoke<JobState>('bigenv:installs:start', sdkId, version),
     cancel: (jobId) => invoke('bigenv:installs:cancel', jobId),
     list: () => invoke<JobState[]>('bigenv:installs:list'),
+    clear: () => invoke('bigenv:installs:clear'),
   },
   installed: {
     list: () => invoke<InstallRecord[]>('bigenv:installed:list'),
@@ -45,8 +46,12 @@ const bridge: Bridge = {
     setPathMode: (mode) => invoke('bigenv:env:setPathMode', mode),
   },
   projects: {
-    inspect: (dir) => invoke('bigenv:projects:inspect', dir),
-    lock: (dir, versions) => invoke('bigenv:projects:lock', dir, versions),
+    list: () => invoke<ProjectInfo[]>('bigenv:projects:list'),
+    add: (dir) => invoke<ProjectInfo[]>('bigenv:projects:add', dir),
+    remove: (dir) => invoke<ProjectInfo[]>('bigenv:projects:remove', dir),
+    inspect: (dir) => invoke<ProjectInfo>('bigenv:projects:inspect', dir),
+    save: (dir, versions) => invoke<ProjectInfo>('bigenv:projects:save', dir, versions),
+    openTerminal: (dir) => invoke('bigenv:projects:openTerminal', dir),
   },
   system: {
     pickDirectory: () => invoke<string | null>('bigenv:system:pickDirectory'),

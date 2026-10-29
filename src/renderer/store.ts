@@ -12,7 +12,7 @@ import type {
 } from '../shared/types';
 import { bridge } from './lib/bridge';
 
-export type PageKey = 'overview' | 'catalog' | 'installed' | 'jobs' | 'projects' | 'environment' | 'health' | 'settings';
+export type PageKey = 'overview' | 'catalog' | 'jobs' | 'projects' | 'environment' | 'health' | 'settings';
 
 interface Toast {
   text: string;
@@ -30,11 +30,13 @@ interface AppState {
   versions: Record<string, VersionOption[]>;
   versionsLoading: string | null;
   selectedSdk: string | null;
-  project: ProjectInfo | null;
+  projects: ProjectInfo[];
+  projectDir: string | null;
   shell: ShellInfo | null;
   health: HealthReport | null;
   toast: Toast | null;
   busy: string | null;
+  dockVisible: boolean;
 
   init(): Promise<void>;
   setPage(page: PageKey): void;
@@ -45,11 +47,15 @@ interface AppState {
   refreshJobs(): Promise<void>;
   startInstall(sdkId: string, version: string): Promise<void>;
   cancelJob(jobId: string): Promise<void>;
+  clearJobs(): Promise<void>;
+  hideDock(): void;
   useVersion(sdkId: string, version: string): Promise<void>;
   uninstall(sdkId: string, version: string): Promise<void>;
   saveSettings(patch: Partial<Settings>): Promise<void>;
-  inspectProject(dir: string): Promise<void>;
-  lockProject(versions: Record<string, string>): Promise<void>;
+  loadProjects(): Promise<void>;
+  addProject(dir: string): Promise<void>;
+  removeProject(dir: string): Promise<void>;
+  saveProject(dir: string, versions: Record<string, string>): Promise<void>;
   loadShell(): Promise<void>;
   toggleShell(enabled: boolean): Promise<void>;
   setPathMode(mode: PathMode): Promise<void>;
@@ -68,22 +74,27 @@ export const useApp = create<AppState>((set, get) => ({
   versions: {},
   versionsLoading: null,
   selectedSdk: null,
-  project: null,
+  projects: [],
+  projectDir: null,
   shell: null,
   health: null,
   toast: null,
   busy: null,
+  dockVisible: false,
 
   async init() {
     bridge.events.onJob((job) => {
       set((state) => {
         const index = state.jobs.findIndex((item) => item.id === job.id);
         const jobs = index >= 0 ? state.jobs.map((item) => (item.id === job.id ? job : item)) : [job, ...state.jobs];
-        return { jobs };
+        const active = job.phase === 'queued' || job.phase === 'downloading' || job.phase === 'verifying'
+          || job.phase === 'extracting' || job.phase === 'finalizing';
+        return { jobs, dockVisible: active ? true : state.dockVisible };
       });
       if (job.phase === 'done' || job.phase === 'error') {
         void get().refreshInstalled();
         void get().refreshCatalog();
+        void get().loadProjects();
         set((state) => ({
           versions: { ...state.versions, [job.sdk]: [] },
         }));
@@ -104,9 +115,15 @@ export const useApp = create<AppState>((set, get) => ({
       bridge.installed.list(),
       bridge.installs.list(),
     ]);
-    set({ settings, installed, jobs });
+    set({
+      settings,
+      installed,
+      jobs,
+      dockVisible: jobs.some((job) => !['done', 'error', 'canceled'].includes(job.phase)),
+    });
     await get().refreshCatalog();
     void get().loadShell();
+    void get().loadProjects();
   },
 
   setPage(page) {
@@ -220,23 +237,71 @@ export const useApp = create<AppState>((set, get) => ({
     }
   },
 
-  async inspectProject(dir) {
+  async loadProjects() {
     try {
-      set({ project: await bridge.projects.inspect(dir) });
-    } catch (error) {
-      get().notify(`读取项目失败：${(error as Error).message}`, 'err');
+      const projects = await bridge.projects.list();
+      set((state) => {
+        const projectDir = state.projectDir && projects.some((item) => item.dir === state.projectDir)
+          ? state.projectDir
+          : (projects[0]?.dir ?? null);
+        return { projects, projectDir };
+      });
+    } catch {
+      /* transient */
     }
   },
 
-  async lockProject(versions) {
-    const project = get().project;
-    if (!project) return;
+  async addProject(dir) {
     try {
-      set({ project: await bridge.projects.lock(project.dir, versions) });
-      get().notify('项目版本已锁定');
+      const projects = await bridge.projects.add(dir);
+      set({ projects, projectDir: dir });
+      get().notify('已加入项目列表');
     } catch (error) {
-      get().notify(`写入失败：${(error as Error).message}`, 'err');
+      get().notify(`添加失败：${(error as Error).message}`, 'err');
     }
+  },
+
+  async removeProject(dir) {
+    try {
+      const projects = await bridge.projects.remove(dir);
+      set((state) => ({
+        projects,
+        projectDir: state.projectDir === dir ? (projects[0]?.dir ?? null) : state.projectDir,
+      }));
+      get().notify('已从项目列表移除');
+    } catch (error) {
+      get().notify(`移除失败：${(error as Error).message}`, 'err');
+    }
+  },
+
+  async saveProject(dir, versions) {
+    set({ busy: 'project' });
+    try {
+      const info = await bridge.projects.save(dir, versions);
+      set((state) => ({
+        projects: state.projects.map((item) => (item.dir === dir ? info : item)),
+        projectDir: dir,
+      }));
+      get().notify(Object.keys(versions).length > 0 ? '该项目的运行环境已保存' : '已清空该项目的运行环境');
+    } catch (error) {
+      get().notify(`保存失败：${(error as Error).message}`, 'err');
+    } finally {
+      set({ busy: null });
+    }
+  },
+
+  async clearJobs() {
+    try {
+      await bridge.installs.clear();
+      await get().refreshJobs();
+      set({ dockVisible: false });
+    } catch (error) {
+      get().notify(`清空失败：${(error as Error).message}`, 'err');
+    }
+  },
+
+  hideDock() {
+    set({ dockVisible: false });
   },
 
   async loadShell() {

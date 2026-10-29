@@ -18,6 +18,17 @@ function sanitize(input: Partial<Settings>, base: Settings): Settings {
   merged.showUnsupported = merged.showUnsupported !== false;
   merged.shellEnabled = merged.shellEnabled === true;
   merged.pathMode = merged.pathMode === 'user' || merged.pathMode === 'machine' ? merged.pathMode : 'off';
+  const projects = Array.isArray(merged.projects) ? merged.projects : [];
+  const seen = new Set<string>();
+  merged.projects = projects
+    .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    .map((item) => normalizeDir(item))
+    .filter((item) => {
+      const key = item.toLowerCase();
+      if (!item || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
   return merged;
 }
 

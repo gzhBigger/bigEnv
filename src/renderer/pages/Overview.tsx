@@ -70,7 +70,7 @@ export function Overview(): JSX.Element {
           <div className="card-head">
             <h2>已安装运行时</h2>
             <span className="meta">{installed.length} 项</span>
-            <button type="button" className="btn ghost sm" style={{ marginLeft: 8 }} onClick={() => setPage('installed')}>
+            <button type="button" className="btn ghost sm" style={{ marginLeft: 8 }} onClick={() => setPage('catalog')}>
               全部 <ArrowRight size={12} />
             </button>
           </div>

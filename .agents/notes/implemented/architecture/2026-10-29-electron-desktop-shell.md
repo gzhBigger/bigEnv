@@ -16,6 +16,7 @@ Status: implemented
 - **渲染进程与主进程的契约只有一处**：`src/shared/types.ts` 的 `Bridge` 接口。preload 用 `contextBridge` 暴露 `window.bigenv`，每个方法对应一个 `bigenv:*` `ipcMain.handle`；单向事件走四条通道（`bigenv:job` / `bigenv:installed` / `bigenv:catalog` / `bigenv:settings`）。
 - **构建**：主进程/preload 用 esbuild 打成 CJS（`out/main.cjs`、`out/preload.cjs`），渲染进程用 Vite（`out/renderer`）。两者都走 `npm run build`，`npm run dev` 同时起 vite 与 esbuild watch 再拉 Electron。
 - **窗口**：`titleBarStyle: 'hidden'` + `titleBarOverlay` 自绘标题栏；`contextIsolation: true`、`nodeIntegration: false`、`sandbox: false`（preload 需要 Node，但渲染进程仍无 Node）；生产模式由主进程注入 CSP，`index.html` 里不放 CSP meta（否则 dev 的 HMR 内联脚本被拦）。
+- **界面信息架构（第二轮反馈后）**：取消独立的「已安装」页，已安装版本并入「SDK 目录」——卡片直接列出已装版本 chips，并提供「已安装」筛选；「项目环境」页管理 `settings.projects` 里登记的多个目录，用勾选式表格决定每个目录激活哪些 SDK（保存为目录下的 `.bigenv.json`，格式见 [环境注入与项目锁](../feature/2026-10-29-env-injection-and-project-lock.md)）；安装队列的悬浮面板可关闭，队列页可一键清空已完成记录。
 
 ## Alternatives considered
 

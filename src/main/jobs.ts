@@ -45,6 +45,16 @@ export class JobQueue {
     return this.jobs.get(id);
   }
 
+  /** Drops every finished job so the queue page (and dock) can be cleared. */
+  clear(): void {
+    for (const [id, job] of [...this.jobs]) {
+      if (job.phase === 'done' || job.phase === 'error' || job.phase === 'canceled') {
+        this.jobs.delete(id);
+        this.lastEmit.delete(id);
+      }
+    }
+  }
+
   async start(sdk: string, version: string): Promise<JobState> {
     for (const job of this.jobs.values()) {
       if (job.sdk === sdk && job.version === version && job.phase !== 'done' && job.phase !== 'error' && job.phase !== 'canceled') {

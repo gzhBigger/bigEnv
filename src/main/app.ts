@@ -1,4 +1,4 @@
-import type { Settings } from '../shared/types';
+import type { ProjectInfo, Settings } from '../shared/types';
 import { CatalogService, detectCapabilities, type Capabilities } from './catalog';
 import { EnvManager } from './envManager';
 import { HealthService } from './health';
@@ -9,7 +9,10 @@ import { appPaths } from './paths';
 import { ProjectService } from './projects';
 import { Registry } from './registry';
 import { getSettings, loadSettings, updateSettings } from './store';
+import { mapLimit } from './util';
 import { MetadataService } from './versions';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 
 export class AppRuntime {
   readonly registry = new Registry(() => getSettings().installRoot);
@@ -76,6 +79,38 @@ export class AppRuntime {
     this.caps = await detectCapabilities();
     this.catalog.setCapabilities(this.caps);
     this.catalog.setInstalledProvider(async () => await this.installedSnapshot());
+  }
+
+  async listProjects(): Promise<ProjectInfo[]> {
+    const dirs = getSettings().projects;
+    if (dirs.length === 0) return [];
+    const inspected = await mapLimit(dirs, 6, async (dir) => {
+      try {
+        return await this.projects.inspect(dir);
+      } catch {
+        return null;
+      }
+    });
+    return inspected.filter((item): item is ProjectInfo => item !== null);
+  }
+
+  async addProject(dirInput: string): Promise<ProjectInfo[]> {
+    const dir = path.resolve(dirInput);
+    const stat = await fs.stat(dir).catch(() => null);
+    if (!stat || !stat.isDirectory()) throw new Error('目录不存在或不是文件夹');
+    const current = getSettings().projects;
+    if (!current.some((item) => item.toLowerCase() === dir.toLowerCase())) {
+      await updateSettings({ projects: [...current, dir] });
+    }
+    return await this.listProjects();
+  }
+
+  async removeProject(dirInput: string): Promise<ProjectInfo[]> {
+    const dir = path.resolve(dirInput);
+    const current = getSettings().projects;
+    const next = current.filter((item) => item.toLowerCase() !== dir.toLowerCase());
+    if (next.length !== current.length) await updateSettings({ projects: next });
+    return await this.listProjects();
   }
 
   async applySettings(patch: Partial<Settings>): Promise<Settings> {

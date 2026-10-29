@@ -114,9 +114,9 @@ export class EnvManager {
     }
     const paths: string[] = [];
     const vars: Record<string, string> = {};
-    const sdks = [...bySdk.keys()].sort((a, b) => a.localeCompare(b));
+    const sdks = (overrides ? [...overrides.keys()] : [...bySdk.keys()]).sort((a, b) => a.localeCompare(b));
     for (const sdk of sdks) {
-      const candidates = bySdk.get(sdk)!;
+      const candidates = bySdk.get(sdk) ?? [];
       const wanted = overrides?.get(sdk);
       const record = wanted ? candidates.find((item) => item.version === wanted) : candidates.find((item) => item.current);
       if (!record) continue;

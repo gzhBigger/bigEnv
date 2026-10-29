@@ -8,7 +8,6 @@ import { SdkSheet } from './components/SdkSheet';
 import { Toast } from './components/Toast';
 import { Overview } from './pages/Overview';
 import { Catalog } from './pages/Catalog';
-import { Installed } from './pages/Installed';
 import { Jobs } from './pages/Jobs';
 import { Projects } from './pages/Projects';
 import { Environment } from './pages/Environment';
@@ -18,7 +17,6 @@ import { Settings } from './pages/Settings';
 const TITLES: Record<PageKey, string> = {
   overview: '概览',
   catalog: 'SDK 目录',
-  installed: '已安装',
   jobs: '安装队列',
   projects: '项目环境',
   environment: 'Shell 集成',
@@ -30,8 +28,6 @@ function PageContent({ page }: { page: PageKey }): JSX.Element {
   switch (page) {
     case 'catalog':
       return <Catalog />;
-    case 'installed':
-      return <Installed />;
     case 'jobs':
       return <Jobs />;
     case 'projects':

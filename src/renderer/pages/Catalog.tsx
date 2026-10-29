@@ -15,6 +15,8 @@ export function Catalog(): JSX.Element {
 
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('全部');
+  const [onlyInstalled, setOnlyInstalled] = useState(false);
+  const installedCount = useMemo(() => catalog.filter((sdk) => sdk.installedVersions.length > 0).length, [catalog]);
 
   const categories = useMemo(() => {
     const present = new Set(catalog.map((sdk) => sdk.category));
@@ -27,6 +29,7 @@ export function Catalog(): JSX.Element {
     const keyword = query.trim().toLowerCase();
     return catalog
       .filter((sdk) => (category === '全部' ? true : sdk.category === category))
+      .filter((sdk) => (onlyInstalled ? sdk.installedVersions.length > 0 : true))
       .filter((sdk) => (settings?.showUnsupported ? true : sdk.installable))
       .filter((sdk) =>
         keyword.length === 0
@@ -43,7 +46,7 @@ export function Catalog(): JSX.Element {
         if (byCategory !== 0) return byCategory;
         return a.name.localeCompare(b.name);
       });
-  }, [catalog, category, query, settings?.showUnsupported]);
+  }, [catalog, category, query, settings?.showUnsupported, onlyInstalled]);
 
   const installedBytes = installed.reduce((sum, item) => sum + item.sizeBytes, 0);
 
@@ -58,6 +61,13 @@ export function Catalog(): JSX.Element {
           </p>
         </div>
         <div className="actions">
+          <button
+            type="button"
+            className={`btn ${onlyInstalled ? 'primary' : ''}`}
+            onClick={() => setOnlyInstalled((value) => !value)}
+          >
+            已安装 · {installedCount}
+          </button>
           <button type="button" className="btn" onClick={() => void refreshCatalog(true)} disabled={catalogLoading}>
             <RefreshCw size={13} className={catalogLoading ? 'spin' : ''} />
             刷新
@@ -110,6 +120,18 @@ export function Catalog(): JSX.Element {
               {sdk.currentVersion && <span className="tag green" style={{ marginLeft: 'auto' }}>{sdk.currentVersion}</span>}
             </div>
             <div className="sdk-desc">{sdk.description}</div>
+            {sdk.installedVersions.length > 0 && (
+              <div className="sdk-versions">
+                {sdk.installedVersions.slice(0, 5).map((version) => (
+                  <span key={version} className="tag mono">
+                    {version}
+                  </span>
+                ))}
+                {sdk.installedVersions.length > 5 && (
+                  <span className="tag">+{sdk.installedVersions.length - 5}</span>
+                )}
+              </div>
+            )}
             <div className="sdk-foot">
               <span className="tag">{sdk.category}</span>
               <span className="tag">{sdk.versionCount} 版本</span>

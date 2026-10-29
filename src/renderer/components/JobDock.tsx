@@ -6,22 +6,35 @@ import { formatSpeed, percent, phaseText } from '../lib/format';
 
 export function JobDock(): JSX.Element | null {
   const jobs = useApp((state) => state.jobs);
+  const dockVisible = useApp((state) => state.dockVisible);
   const cancelJob = useApp((state) => state.cancelJob);
+  const hideDock = useApp((state) => state.hideDock);
   const [collapsed, setCollapsed] = useState(false);
 
   const active = jobs.filter((job) => !['done', 'error', 'canceled'].includes(job.phase));
   const recent = jobs.filter((job) => ['done', 'error'].includes(job.phase)).slice(0, 2);
   const visible = [...active, ...recent];
 
-  if (visible.length === 0) return null;
+  if (!dockVisible || visible.length === 0) return null;
 
   return (
     <div className="dock">
       <div className="dock-head" onClick={() => setCollapsed((value) => !value)}>
         <span className="dot" style={{ background: active.length ? 'var(--accent)' : 'var(--accent-2)' }} />
         <span>{active.length > 0 ? `${active.length} 个任务进行中` : '最近任务'}</span>
-        <span style={{ marginLeft: 'auto', color: 'var(--dim)' }}>
+        <span className="dock-tools">
           {collapsed ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+          <button
+            type="button"
+            className="icon-btn"
+            title="关闭面板"
+            onClick={(event) => {
+              event.stopPropagation();
+              hideDock();
+            }}
+          >
+            <X size={13} />
+          </button>
         </span>
       </div>
       {!collapsed && (

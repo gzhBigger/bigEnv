@@ -246,6 +246,7 @@ const DEFAULT_SETTINGS: Settings = {
   showUnsupported: true,
   shellEnabled: true,
   pathMode: 'off',
+  projects: ['D:\\workspace\\demo-shop', 'D:\\workspace\\api-server'],
 };
 
 function versionsOf(seed: Seed, installed: InstallRecord[]): VersionOption[] {
@@ -293,7 +294,11 @@ export function createMockBridge(): Bridge {
   const installedListeners = new Set<() => void>();
   const settingsListeners = new Set<(value: Settings) => void>();
   const catalogListeners = new Set<(summary: SdkSummary) => void>();
-  let projectLock: Record<string, string> = { node: '22.17.0', go: '1.24.5' };
+  const projectDirs: string[] = ['D:\\workspace\\demo-shop', 'D:\\workspace\\api-server'];
+  const projectLocks = new Map<string, Record<string, string>>([
+    ['D:\\workspace\\demo-shop', { node: '22.17.0', go: '1.24.5' }],
+    ['D:\\workspace\\api-server', { node: '22.17.0' }],
+  ]);
 
   const emitJob = (job: JobState): void => {
     for (const listener of jobListeners) listener({ ...job });
@@ -353,13 +358,14 @@ export function createMockBridge(): Bridge {
     cliScript: 'C:\\Program Files\\bigEnv\\resources\\cli.cjs',
   });
 
-  const project = (): ProjectInfo => {
-    const dir = 'D:\\workspace\\demo-shop';
-    const entries = Object.entries(projectLock).map(([sdk, version]) => {
+  const project = (dir: string): ProjectInfo => {
+    const lock = projectLocks.get(dir) ?? {};
+    const entries = Object.entries(lock).map(([sdk, version]) => {
       const record = installed.find((item) => item.sdk === sdk && item.version === version);
       return { sdk, version, installed: Boolean(record), path: record?.path ?? null };
     });
-    return { dir, lockFile: `${dir}\\.bigenv.json`, versions: { ...projectLock }, entries };
+    const name = dir.split('\\\\').filter(Boolean).pop() ?? dir;
+    return { dir, name, lockFile: `${dir}\\.bigenv.json`, versions: { ...lock }, entries };
   };
 
   const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
@@ -440,6 +446,11 @@ export function createMockBridge(): Bridge {
         emitJob(job);
       },
       list: async () => jobs.map((job) => ({ ...job })),
+      clear: async () => {
+        for (let index = jobs.length - 1; index >= 0; index -= 1) {
+          if (['done', 'error', 'canceled'].includes(jobs[index].phase)) jobs.splice(index, 1);
+        }
+      },
     },
     installed: {
       list: async () => {
@@ -486,14 +497,36 @@ export function createMockBridge(): Bridge {
       },
     },
     projects: {
-      inspect: async () => {
-        await delay(80);
-        return project();
+      list: async () => {
+        await delay(60);
+        return projectDirs.map((dir) => project(dir));
       },
-      lock: async (_dir, versions) => {
-        projectLock = { ...versions };
+      add: async (dir) => {
+        await delay(80);
+        if (!projectDirs.includes(dir)) {
+          projectDirs.push(dir);
+          projectLocks.set(dir, {});
+        }
+        return projectDirs.map((item) => project(item));
+      },
+      remove: async (dir) => {
+        await delay(60);
+        const index = projectDirs.indexOf(dir);
+        if (index >= 0) projectDirs.splice(index, 1);
+        projectLocks.delete(dir);
+        return projectDirs.map((item) => project(item));
+      },
+      inspect: async (dir) => {
+        await delay(80);
+        return project(dir);
+      },
+      save: async (dir, versions) => {
+        projectLocks.set(dir, { ...versions });
         await delay(120);
-        return project();
+        return project(dir);
+      },
+      openTerminal: async () => {
+        await delay(120);
       },
     },
     system: {

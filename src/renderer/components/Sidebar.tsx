@@ -4,7 +4,6 @@ import {
   FolderGit2,
   GaugeCircle,
   ListChecks,
-  PackageCheck,
   Settings2,
   Stethoscope,
   TerminalSquare,
@@ -21,7 +20,6 @@ interface NavEntry {
 const MAIN: NavEntry[] = [
   { key: 'overview', label: '概览', icon: GaugeCircle },
   { key: 'catalog', label: 'SDK 目录', icon: Boxes },
-  { key: 'installed', label: '已安装', icon: PackageCheck },
   { key: 'jobs', label: '安装队列', icon: ListChecks },
 ];
 
@@ -35,15 +33,13 @@ const TOOLS: NavEntry[] = [
 export function Sidebar(): JSX.Element {
   const page = useApp((state) => state.page);
   const setPage = useApp((state) => state.setPage);
-  const installed = useApp((state) => state.installed);
   const jobs = useApp((state) => state.jobs);
   const activeJobs = jobs.filter((job) => !['done', 'error', 'canceled'].includes(job.phase)).length;
 
   const renderNav = (entries: NavEntry[]): JSX.Element[] =>
     entries.map((entry) => {
       const Icon = entry.icon;
-      const count =
-        entry.key === 'installed' ? installed.length : entry.key === 'jobs' && activeJobs > 0 ? activeJobs : null;
+      const count = entry.key === 'jobs' && activeJobs > 0 ? activeJobs : null;
       return (
         <button
           key={entry.key}

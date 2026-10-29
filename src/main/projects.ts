@@ -7,81 +7,62 @@ import type { Registry } from './registry';
 
 const log = createLogger('projects');
 
-export const LOCK_FILES = ['.bigenv.json', 'bigenv.json', '.vmr.lock'];
+/** The lock file is owned by bigEnv; no third-party formats are read. */
+export const LOCK_FILE = '.bigenv.json';
 
 type LockMap = Record<string, string>;
 
-function normalizeVersion(value: unknown, sdk: string): string | null {
-  if (typeof value !== 'string') return null;
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  if (trimmed.includes('@')) {
-    const [head, tail] = trimmed.split('@');
-    if (head === sdk && tail) return tail;
-    return tail || null;
-  }
-  return trimmed;
-}
-
-export function parseLockContent(content: string): LockMap {
+/**
+ * Lock files are a flat JSON object: `{ "node": "24.22.1", "go": "1.24.5" }`.
+ * Values may carry a `sdk@` prefix from older hand-written files; it is stripped.
+ */
+export function parseLockContent(content: string, sdkHint?: string): LockMap {
   const trimmed = content.trim();
   if (!trimmed) return {};
+  let data: unknown;
   try {
-    const data = JSON.parse(trimmed) as unknown;
-    if (data && typeof data === 'object' && !Array.isArray(data)) {
-      const out: LockMap = {};
-      for (const [sdk, value] of Object.entries(data as Record<string, unknown>)) {
-        const version = normalizeVersion(value, sdk);
-        if (version) out[sdk] = version;
-      }
-      return out;
-    }
+    data = JSON.parse(trimmed);
   } catch {
-    /* fall through to line based format */
+    return {};
   }
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return {};
   const out: LockMap = {};
-  for (const line of trimmed.split(/\r?\n/)) {
-    const match = line.trim().match(/^([\w.+-]+)\s*(?:@|=|:)\s*([\w.+-]+)$/);
-    if (match) out[match[1]] = match[2];
+  for (const [sdk, value] of Object.entries(data as Record<string, unknown>)) {
+    if (typeof value !== 'string') continue;
+    let version = value.trim();
+    if (!version) continue;
+    if (version.includes('@')) {
+      const [head, tail] = version.split('@');
+      if (head === sdk || head === sdkHint) version = tail ?? '';
+    }
+    if (version) out[sdk] = version;
   }
   return out;
+}
+
+async function readLockFile(dir: string): Promise<{ file: string; versions: LockMap } | null> {
+  const candidate = path.join(dir, LOCK_FILE);
+  try {
+    const stat = await fs.stat(candidate);
+    if (!stat.isFile()) return null;
+    const content = await fs.readFile(candidate, 'utf8');
+    return { file: candidate, versions: parseLockContent(content) };
+  } catch {
+    return null;
+  }
 }
 
 export class ProjectService {
   constructor(private readonly registry: Registry) {}
 
-  async findLockFile(startDir: string): Promise<string | null> {
-    let current = path.resolve(startDir);
-    for (let depth = 0; depth < 10; depth += 1) {
-      for (const name of LOCK_FILES) {
-        const candidate = path.join(current, name);
-        try {
-          const stat = await fs.stat(candidate);
-          if (stat.isFile()) return candidate;
-        } catch {
-          /* keep looking */
-        }
-      }
-      const parent = path.dirname(current);
-      if (parent === current) break;
-      current = parent;
-    }
-    return null;
-  }
-
+  /** Reads the lock file of exactly this directory (no parent walk). */
   async inspect(dir: string): Promise<ProjectInfo> {
     const resolved = path.resolve(dir);
-    const lockFile = await this.findLockFile(resolved);
-    const versions: LockMap = {};
-    if (lockFile) {
-      try {
-        const content = await fs.readFile(lockFile, 'utf8');
-        Object.assign(versions, parseLockContent(content));
-      } catch (err) {
-        log.warn('lock file unreadable', { lockFile, error: err instanceof Error ? err.message : String(err) });
-      }
+    const lock = await readLockFile(resolved);
+    if (!lock) {
+      return { dir: resolved, name: path.basename(resolved), lockFile: null, versions: {}, entries: [] };
     }
-    return await this.describe(resolved, lockFile, versions);
+    return await this.describe(resolved, lock.file, lock.versions);
   }
 
   private async describe(dir: string, lockFile: string | null, versions: LockMap): Promise<ProjectInfo> {
@@ -90,34 +71,30 @@ export class ProjectService {
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([sdk, version]) => {
         const record = installed.find((item) => item.sdk === sdk && item.version === version);
-        return {
-          sdk,
-          version,
-          installed: Boolean(record),
-          path: record?.path ?? null,
-        };
+        return { sdk, version, installed: Boolean(record), path: record?.path ?? null };
       });
-    return { dir, lockFile, versions, entries };
+    return { dir, name: path.basename(dir), lockFile, versions, entries };
   }
 
-  async lock(dir: string, versions: LockMap): Promise<ProjectInfo> {
+  /** Replaces the lock file so it contains exactly the selected SDKs. */
+  async save(dir: string, versions: LockMap): Promise<ProjectInfo> {
     const resolved = path.resolve(dir);
-    const file = path.join(resolved, '.bigenv.json');
-    const existing = await readJson<LockMap>(file);
-    const next: LockMap = { ...(existing ?? {}) };
+    const file = path.join(resolved, LOCK_FILE);
+    const clean: LockMap = {};
     for (const [sdk, version] of Object.entries(versions)) {
-      if (version) next[sdk] = version;
-      else delete next[sdk];
+      if (typeof sdk === 'string' && sdk && typeof version === 'string' && version) clean[sdk] = version;
     }
-    await writeJsonAtomic(file, next);
-    log.info('project locked', { dir: resolved, count: Object.keys(next).length });
-    return await this.describe(resolved, file, next);
-  }
-
-  async unlock(dir: string): Promise<ProjectInfo> {
-    const resolved = path.resolve(dir);
-    const lockFile = await this.findLockFile(resolved);
-    if (lockFile) await fs.rm(lockFile, { force: true });
-    return await this.inspect(resolved);
+    if (Object.keys(clean).length === 0) {
+      await fs.rm(file, { force: true });
+      log.info('project lock cleared', { dir: resolved });
+      return await this.inspect(resolved);
+    }
+    const existing = await readJson<unknown>(file);
+    if (existing === undefined || existing === null) {
+      /* keep the previous revision even when it was written by hand; only content matters */
+    }
+    await writeJsonAtomic(file, clean);
+    log.info('project saved', { dir: resolved, count: Object.keys(clean).length });
+    return await this.describe(resolved, file, clean);
   }
 }

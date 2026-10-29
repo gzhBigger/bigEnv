@@ -28,7 +28,7 @@ interface Install {
   current: boolean;
 }
 
-const LOCK_FILES = ['.bigenv.json', 'bigenv.json', '.vmr.lock'];
+const LOCK_FILES = ['.bigenv.json', 'bigenv.json'];
 const META_FILE = '.bigenv.json';
 
 function dataRoot(): string {
@@ -269,7 +269,7 @@ function help(): void {
       '  bigenv use <sdk@version>            切换当前版本（改 junction）',
       '  bigenv help                         显示本帮助',
       '',
-      '说明: run 会向上查找 .bigenv.json / bigenv.json / .vmr.lock；',
+      '说明: run 会向上查找 .bigenv.json / bigenv.json；',
       '     没有锁文件时注入全部 current 版本；--all 强制注入全部。',
     ].join('\n') + '\n',
   );
