@@ -81,6 +81,11 @@ export class AppRuntime {
       if (active.length > 0) await updateSettings({ pathSdks: active });
     }
     await runtime.env.refresh();
+    // Users upgrading from the profile-injection era: drop env.ps1/env.cmd/env.sh and the
+    // marker block in their PowerShell profile, since global PATH replaced that mechanism.
+    await runtime.env.cleanupLegacyInjection().catch((err: unknown) => {
+      console.warn('[app] legacy shell cleanup failed', err instanceof Error ? err.message : String(err));
+    });
     return runtime;
   }
 
@@ -139,9 +144,6 @@ export class AppRuntime {
     if (previous.installRoot !== next.installRoot) {
       this.registry.invalidate();
       await this.registry.scan();
-    }
-    if (previous.shellEnabled && !next.shellEnabled) {
-      await this.env.disable();
     }
     if (previous.pathMode !== next.pathMode && next.pathMode === 'off') {
       await this.env.setPathMode('off');

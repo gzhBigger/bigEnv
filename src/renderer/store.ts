@@ -21,7 +21,6 @@ export type PageKey =
   | 'jobs'
   | 'projects'
   | 'globals'
-  | 'environment'
   | 'health'
   | 'settings';
 
@@ -91,7 +90,6 @@ interface AppState {
   removeProject(dir: string): Promise<void>;
   saveProject(dir: string, versions: Record<string, string>): Promise<void>;
   loadShell(): Promise<void>;
-  toggleShell(enabled: boolean): Promise<void>;
   setPathMode(mode: PathMode): Promise<void>;
   setPathSdks(sdks: string[]): Promise<void>;
   /** Switches the palette immediately, then persists it in settings.json. */
@@ -184,7 +182,6 @@ export const useApp = create<AppState>((set, get) => ({
   setPage(page) {
     set({ page });
     if (page === 'health' && !get().health) void get().scanHealth();
-    if (page === 'environment') void get().loadShell();
   },
 
   openSdk(sdkId) {
@@ -381,17 +378,6 @@ export const useApp = create<AppState>((set, get) => ({
       set({ shell: await bridge.env.info() });
     } catch {
       /* transient */
-    }
-  },
-
-  async toggleShell(enabled) {
-    try {
-      const shell = enabled ? await bridge.env.enable() : await bridge.env.disable();
-      // enable()/disable() persist the flag on the main side; mirror it into the store.
-      set({ shell, settings: await bridge.settings.get() });
-      get().notify(enabled ? '已注入 Shell 配置' : '已移除 Shell 配置');
-    } catch (error) {
-      get().notify(`操作失败：${(error as Error).message}`, 'err');
     }
   },
 

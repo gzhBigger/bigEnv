@@ -43,8 +43,6 @@ export interface Settings {
   concurrency: number;
   /** Show SDKs that have no Windows package in the catalog. */
   showUnsupported: boolean;
-  /** Whether the PowerShell profile hook is installed. */
-  shellEnabled: boolean;
   /** Where `<installRoot>\\<sdk>\\current` entries are published so every process can see them. */
   pathMode: PathMode;
   /** SDKs whose `current` directory is published to the global PATH (empty = only the CLI shim). */
@@ -145,11 +143,7 @@ export interface PathConflict {
 }
 
 export interface ShellInfo {
-  envScriptPath: string;
-  profilePath: string | null;
-  enabled: boolean;
-  pathEntries: string[];
-  vars: Record<string, string>;
+  /** Global PATH scope: off, current user, or every account. */
   pathMode: PathMode;
   /** Stable `<installRoot>\<sdk>\current` directories published to PATH. */
   globalEntries: string[];
@@ -238,8 +232,6 @@ export interface Bridge {
   };
   env: {
     info(): Promise<ShellInfo>;
-    enable(): Promise<ShellInfo>;
-    disable(): Promise<ShellInfo>;
     openTerminal(dir?: string): Promise<void>;
     setPathMode(mode: PathMode): Promise<ShellInfo>;
     setPathSdks(sdks: string[]): Promise<ShellInfo>;

@@ -59,9 +59,11 @@ Status: implemented
 
 两者都不影响「关闭全局激活后一切回到原样」：`setPathMode('off')` 逐条删除托管条目，实测用户 PATH 与备份逐字节相等。
 
+- **A5：删除 profile 注入（第九轮反馈后加入）**：用户指出「Shell 集成」与「全局环境」重复——已配环境变量就不必再注入 profile。确认两者最终都只是前置 PATH（已装 SDK 的 `.bigenv.json` 里 `envs` 为空时连 `GOROOT` 之类都没有），而 profile 只对交互式 PowerShell 生效、对 `cmd.exe`/IDE/AI agent 无效，故整体删除：设置项 `shellEnabled`、`Bridge.env.enable/disable`、`env:enable/disable` IPC、`Shell 集成` 页与导航、生成 `env.ps1/env.cmd/env.sh` 与写 profile 标记块的代码全部移除。为不把旧机器留在半改状态，`AppRuntime.create()` 调 `cleanupLegacyInjection()`：删除遗留的三个 env 脚本，并从两个 profile 里剥掉 `# >>> bigenv initialize >>>` 标记块；`settings.json` 里的 `shellEnabled` 在载入时被剔除并立即重写。保留 `computeInjection`/`openTerminal`，因为「项目环境 → 在此开终端」仍要靠它把锁里的版本注入子进程。
+
 ## Alternatives considered
 
-- **只做 profile 注入，让用户自己 dot-source**：零风险，但对 cmd.exe 与 IDE 完全无效，等于没回答用户的问题。
+- **只做 profile 注入，让用户自己 dot-source**：零风险，但对 cmd.exe 与 IDE 完全无效，等于没回答用户的问题。**后来连这个入口也删了**（A5）：它和全局 PATH 重复，而全局 PATH 覆盖面更大。
 - **`setx` / 直接 `Environment.SetEnvironmentVariable` 写用户 PATH**：最短实现，但 `setx` 会截断到 1024 字符、把 `REG_EXPAND_SZ` 降级成 `REG_SZ`（`%USERPROFILE%` 之类展开变量被固化），且无法可靠识别并清理自己的旧条目。改用 `reg add` 保留类型，再用 SetEnvironmentVariable 仅做广播。
 - **写进系统 PATH 并把 vmr 的条目挤下去**：能「赢」，但擅自改动另一个工具的安装痕迹，卸载 bigEnv 后用户的其它工具链可能坏掉。选择只报告冲突。
 - **CLI 用 Go/Rust 编译成单文件**：对用户零依赖，但要引入第二套工具链与交叉编译。复用 Electron 自带的 Node 与 `ELECTRON_RUN_AS_NODE=1` 已足够，代价是启动多几十毫秒。
@@ -72,7 +74,7 @@ Status: implemented
 - **失败后让用户自己去「以管理员身份运行」**：能实现但把权限问题转嫁给用户；点击「系统 PATH」本身就是意图，改为当场弹 UAC。
 - **把 machine 写操作放进主进程里的隐藏窗口 / `runas` 库**：前者要维护第二个渲染进程，后者是原生 C++ 依赖。用「自己的 exe + 参数」当升权副本，零依赖且天然复用同一份 Node 代码。
 - **先清另一个 scope 再写目标 scope**：看起来"干净"，但目标写失败时两边条目都没了（实测把用户 PATH 清空过）。改为先写目标、成功再清旧 scope。
-- **全局 `cd` hook 自动切版本**：见 [Shell 注入与项目锁](2026-10-29-env-injection-and-project-lock.md)，已否。
+- **全局 `cd` hook 自动切版本**：见 [项目锁与临时环境注入](2026-10-29-env-injection-and-project-lock.md)，已否。
 
 ## Consequences
 

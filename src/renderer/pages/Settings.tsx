@@ -22,7 +22,6 @@ const UPDATE_STATUS: Record<string, string> = {
 export function Settings(): JSX.Element {
   const settings = useApp((state) => state.settings);
   const saveSettings = useApp((state) => state.saveSettings);
-  const toggleShell = useApp((state) => state.toggleShell);
   const busy = useApp((state) => state.busy);
   const update = useApp((state) => state.update);
   const checkingUpdate = useApp((state) => state.checkingUpdate);
@@ -139,7 +138,7 @@ export function Settings(): JSX.Element {
         <div>
           <div className="card" style={{ marginBottom: 14 }}>
             <div className="card-head">
-              <h2>界面与 Shell</h2>
+              <h2>界面</h2>
             </div>
             <div className="spread" style={{ padding: '6px 0' }}>
               <div>
@@ -152,19 +151,6 @@ export function Settings(): JSX.Element {
                 aria-label="显示不可安装 SDK"
                 disabled={busy === 'settings'}
                 onClick={() => void saveSettings({ showUnsupported: !settings?.showUnsupported })}
-              />
-            </div>
-            <div className="divider" />
-            <div className="spread" style={{ padding: '6px 0' }}>
-              <div>
-                <div>注入 PowerShell 配置</div>
-                <div className="desc">把一个带标记的初始化脚本写进 `$PROFILE`，新开终端自动带上 bigEnv 的 PATH 与变量。</div>
-              </div>
-              <button
-                type="button"
-                className={`switch ${settings?.shellEnabled ? 'on' : ''}`}
-                aria-label="注入 PowerShell 配置"
-                onClick={() => void toggleShell(!settings?.shellEnabled)}
               />
             </div>
           </div>

@@ -81,7 +81,6 @@ export function defaultSettings(): Settings {
     proxy: '',
     concurrency: 2,
     showUnsupported: true,
-    shellEnabled: false,
     pathMode: 'off',
     pathSdks: [],
     projects: [],

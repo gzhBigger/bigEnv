@@ -27,7 +27,6 @@ const MAIN: NavEntry[] = [
 const TOOLS: NavEntry[] = [
   { key: 'projects', label: '项目环境', icon: FolderGit2 },
   { key: 'globals', label: '全局环境', icon: Globe2 },
-  { key: 'environment', label: 'Shell 集成', icon: TerminalSquare },
   { key: 'health', label: '体检与清理', icon: Stethoscope },
   { key: 'settings', label: '设置', icon: Settings2 },
 ];

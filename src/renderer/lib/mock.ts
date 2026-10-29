@@ -244,7 +244,6 @@ const DEFAULT_SETTINGS: Settings = {
   proxy: '',
   concurrency: 2,
   showUnsupported: true,
-  shellEnabled: true,
   pathMode: 'off',
   pathSdks: ['node', 'go'],
   projects: ['D:\\workspace\\demo-shop', 'D:\\workspace\\api-server'],
@@ -346,11 +345,6 @@ export function createMockBridge(): Bridge {
   });
 
   const envInfo = (): ShellInfo => ({
-    envScriptPath: `${settings.installRoot}\\..\\bigenv\\env\\env.ps1`,
-    profilePath: 'C:\\Users\\dev\\Documents\\PowerShell\\Microsoft.PowerShell_profile.ps1',
-    enabled: settings.shellEnabled,
-    pathEntries: installed.filter((item) => item.current).map((item) => item.path),
-    vars: {},
     pathMode: settings.pathMode,
     pathSdks: settings.pathSdks,
     globalEntries: installed.filter((item) => item.current).map((item) => `${settings.installRoot}\\${item.sdk}\\current`),
@@ -482,14 +476,6 @@ export function createMockBridge(): Bridge {
     },
     env: {
       info: async () => envInfo(),
-      enable: async () => {
-        settings = { ...settings, shellEnabled: true };
-        return envInfo();
-      },
-      disable: async () => {
-        settings = { ...settings, shellEnabled: false };
-        return envInfo();
-      },
       openTerminal: async () => {
         await delay(120);
       },

@@ -2,6 +2,8 @@
 
 Status: implemented
 
+> 后续变更（2026-10-29，第九轮反馈）：**profile 注入与 `env.ps1` 已整体删除**，本笔记的第 1 个需求改由「全局 PATH + `bigenv` CLI」承担，见 [全局 PATH 与 CLI](2026-10-29-global-path-and-cli.md)。原因：与全局环境页功能重复（两者最终都只是把 PATH 前置，而已装 SDK 的 `.bigenv.json` 里 `envs` 为空时连额外变量都没有），且 profile 只对交互式 PowerShell 生效。下面保留删除前的决策与理由，作为历史记录。
+
 ## Problem
 
 两个相关但独立的需求：

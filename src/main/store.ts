@@ -11,13 +11,14 @@ const listeners = new Set<(value: Settings) => void>();
 
 function sanitize(input: Partial<Settings>, base: Settings): Settings {
   const merged: Settings = { ...base, ...input };
+  // Drop keys retired from the schema so settings.json does not keep stale switches around.
+  delete (merged as unknown as Record<string, unknown>).shellEnabled;
   merged.installRoot = merged.installRoot ? normalizeDir(merged.installRoot) : base.installRoot;
   merged.metaBase = (merged.metaBase || base.metaBase).replace(/\/+$/, '');
   merged.mirror = merged.mirror === 'cn' ? 'cn' : 'off';
   merged.proxy = (merged.proxy ?? '').trim();
   merged.concurrency = Math.min(6, Math.max(1, Math.round(Number(merged.concurrency) || 2)));
   merged.showUnsupported = merged.showUnsupported !== false;
-  merged.shellEnabled = merged.shellEnabled === true;
   merged.pathMode = merged.pathMode === 'user' || merged.pathMode === 'machine' ? merged.pathMode : 'off';
   merged.pathSdks = Array.isArray(merged.pathSdks)
     ? merged.pathSdks.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
@@ -41,6 +42,10 @@ export async function loadSettings(): Promise<Settings> {
   const stored = await readJson<Partial<Settings>>(appPaths().settingsFile);
   pathSdksExplicit = Array.isArray(stored?.pathSdks);
   settings = sanitize(stored ?? {}, defaultSettings());
+  if (stored && 'shellEnabled' in stored) {
+    // Rewrite once so the retired key disappears from settings.json.
+    await writeJsonAtomic(appPaths().settingsFile, settings);
+  }
   log.info('settings loaded', { installRoot: settings.installRoot, metaBase: settings.metaBase });
   return settings;
 }

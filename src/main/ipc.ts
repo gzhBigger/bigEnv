@@ -100,16 +100,6 @@ export function registerIpc(runtime: AppRuntime): void {
   });
 
   ipcMain.handle('bigenv:env:info', async () => await runtime.env.info());
-  ipcMain.handle('bigenv:env:enable', async () => {
-    const settings = await runtime.applySettings({ shellEnabled: true });
-    broadcast('bigenv:settings', settings);
-    return await runtime.env.enable();
-  });
-  ipcMain.handle('bigenv:env:disable', async () => {
-    const settings = await runtime.applySettings({ shellEnabled: false });
-    broadcast('bigenv:settings', settings);
-    return await runtime.env.disable();
-  });
   ipcMain.handle('bigenv:env:openTerminal', async (_event, dir: unknown) => {
     const target = typeof dir === 'string' && dir.trim() ? dir : undefined;
     await runtime.env.openTerminal(target);

@@ -4,7 +4,7 @@ Status: implemented
 
 ## Problem
 
-设置页的「显示不可安装的 SDK」「注入 PowerShell 配置」两个开关点了没反应：它们只改渲染进程里的 `draft`，切到别的页再回来，`draft` 从持久化的 `settings` 重新同步，看起来就像自己弹回去了。`shellEnabled` 真正落盘的路径是 `env:enable` / `env:disable`（写 profile 标记块 + `applySettings`），而开关根本没走这条路径；即使走了，`store.toggleShell()` 也只更新 `shell`，不刷新 `settings`，开关视觉仍然是旧值。
+设置页的「显示不可安装的 SDK」「注入 PowerShell 配置」两个开关点了没反应（后者已在第九轮反馈后连同 profile 注入一起删除）：它们只改渲染进程里的 `draft`，切到别的页再回来，`draft` 从持久化的 `settings` 重新同步，看起来就像自己弹回去了。`shellEnabled` 真正落盘的路径是 `env:enable` / `env:disable`（写 profile 标记块 + `applySettings`），而开关根本没走这条路径；即使走了，`store.toggleShell()` 也只更新 `shell`，不刷新 `settings`，开关视觉仍然是旧值。
 
 另一件事：用户装完之后想知道「有没有新版本」。没有发布页入口、也没有版本号对照，只能靠用户自己去 GitHub 找。
 
@@ -12,7 +12,7 @@ Status: implemented
 
 **把设置项按「即时生效」和「需要保存」分成两类，并新增一个读 Releases 的更新检查入口。**
 
-- 开关类（主题、显示不可安装的 SDK、注入 PowerShell 配置）点击即落盘：直接调 `applySettings` / `toggleShell`，成功后刷新 `settings` 并靠 `bigenv:settings` 广播同步其它窗口。
+- 开关类（主题、显示不可安装的 SDK）点击即落盘：直接调 `applySettings`，成功后刷新 `settings` 并靠 `bigenv:settings` 广播同步其它窗口。（原先还有「注入 PowerShell 配置」开关走 `toggleShell`；该功能第九轮反馈后整体删除，设置页只剩一个开关。）
 - 文本类（安装根目录、元数据源、镜像、代理、并发数）保留 `draft`：改动后页头出现「有未保存的修改」，点「保存」才一次性提交；没改动时保存按钮置灰。安装根目录变化会触发重扫与 PATH 重写，不适合每次按键都提交。
 - `store.toggleShell()` 在 `env.enable()/disable()` 返回后重新 `bridge.settings.get()`，把 `shellEnabled` 写回 store；主进程 `env:enable/disable` 同时广播 `bigenv:settings`。
 - 新增 `src/main/updates.ts`：`check(force)` 先读 6 小时缓存，再依次尝试 **GitHub Releases API → releases 页面 HTML → 仓库 `package.json` 的版本**，任一成功即返回 `UpdateInfo{ current, latest, status, available, setupUrl, portableUrl, pageUrl }`；全部失败给 `status:'error'` 与中文原因。

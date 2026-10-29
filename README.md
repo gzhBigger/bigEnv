@@ -11,7 +11,6 @@
 - **SDK 目录**：读取 vsources 的 83 个 SDK（Windows 上 52 个可直接安装），按分类浏览、搜索，支持镜像与代理；「已安装」筛选与卡片上的版本号把「能装什么」和「装了什么」放在同一页。点开卡片后，版本列表分「已安装 / 可安装」两页切换，装完或卸载后自动刷新，不用手动重开。
 - **安装与切换**：zip / tar.gz 解压安装到 `~/.bigenv/<sdk>/<version>`，`current` 用 Windows junction 指向当前版本；切换只改链接，不复制文件。下载支持断点续传、sha256 校验、并发队列、取消与失败清理。点「安装」后抽屉自动关闭，进度交给右下角队列面板。
 - **已安装管理**：在 SDK 目录页点开卡片即可看到已装版本号；设为当前、打开目录、删除都在同一处完成。删除某个版本后该行立即变成可重装状态，不会残留「当前」标记。
-- **Shell 集成**：生成 `env.ps1` / `env.cmd` / `env.sh`，可选在 PowerShell profile 中写入带标记的加载块；关闭时删除标记块。「打开终端」把环境只注入新进程，不动系统环境变量。
 - **全局环境（可选）**：独立页面里先选「关闭 / 用户 PATH / 系统 PATH」，再逐 SDK 点「启用」选择哪些 `<安装根>\<sdk>\current` 要进入 PATH——cmd、IDE、AI agent 都能直接拿到，切版本只改 junction，已开终端的下一条命令即生效。只发布启用的 SDK；已卸载但仍留在清单里的 SDK 会标出来，点「移除」即从 PATH 清掉；每次写入都有行内「写入中」状态，失败会在卡片里给出原因和「重试」按钮。会检测「被更靠前的同名程序遮蔽」并点名提示。
 - **`bigenv` CLI**：`bigenv run -- <cmd>` 按项目锁注入并执行、`env` 输出环境、`which` / `list` / `use` 管理版本，供脚本与 AI agent 调用，不要求装 Node。
 - **项目环境**：登记多个项目目录，每个目录单独勾选要用哪些 SDK、哪个版本，写入该目录下的 `.bigenv.json`；打开终端或 `bigenv run` 时只激活勾选的 SDK。锁里记录但已经卸载的 SDK 仍会列出（标记「未安装」），取消勾选就能把它从配置里移除。格式只认 bigEnv 自己的 JSON 对象，不再兼容 `.vmr.lock`。
@@ -28,13 +27,13 @@
 | --- | --- |
 | ![版本](docs/screenshots/versions.png) | ![全局环境](docs/screenshots/globals.png) |
 
-| Shell 集成 | 安装队列 |
+| 安装队列 | 设置 |
 | --- | --- |
-| ![Shell 集成](docs/screenshots/environment.png) | ![安装队列](docs/screenshots/jobs.png) |
+| ![安装队列](docs/screenshots/jobs.png) | ![设置](docs/screenshots/settings.png) |
 
-| 设置 | 体检与清理 |
-| --- | --- |
-| ![设置](docs/screenshots/settings.png) | ![体检](docs/screenshots/health.png) |
+| 体检与清理 |
+| --- |
+| ![体检](docs/screenshots/health.png) |
 
 ## 激活方式
 
@@ -43,7 +42,6 @@
 | 方式 | 覆盖范围 | 怎么用 |
 | --- | --- | --- |
 | 项目锁 | 该目录下的子进程 | 在项目环境页勾选 SDK 与版本，保存到 `.bigenv.json`；「在此开终端」或 `bigenv run -- <cmd>` 只注入勾选的那些 |
-| PowerShell 注入 | 新开的 PowerShell | Shell 集成页打开开关，写入 profile 标记块 |
 | 全局 PATH | 整台机器的所有新进程 | 全局环境页选「用户 PATH」或「系统 PATH」，再逐 SDK 点「启用」 |
 
 全局 PATH 写入的是稳定目录 `<安装根>\<sdk>\current`（junction），不是带版本号的实体目录——所以切版本不需要改 PATH，也不需要重开已存在的终端（该终端里的下一条命令就会用新版本）。只有被启用的 SDK 才会进 PATH；清单为空时只发布 `bigenv` 启动器目录。选「系统 PATH」时点一下就弹出 Windows 管理员授权（UAC），批准后直接写 HKLM，不需要先以管理员身份重启应用；取消或失败时页面原地给出原因和「重试」，设置与已写入的 scope 都保持原样（切回「用户 PATH」也会弹一次 UAC，用来清掉系统 PATH 里的条目）。若更靠前的 PATH 里已有同名程序（例如别的版本管理器写进系统 PATH 的 node），页面会用红字点名冲突，bigEnv 不会去改别人的条目。
@@ -64,7 +62,7 @@ bigenv use node@24.4.0          # 切换 current
 
 设置页把「即时生效」和「需要保存」分开：
 
-- **开关即时生效**：主题、显示不可安装的 SDK、注入 PowerShell 配置——点一下立刻写盘并广播，不需要再点保存。Shell 注入的开关同时负责写入/移除 profile 里的标记块，切页回来状态保持。
+- **开关即时生效**：主题与「显示不可安装的 SDK」点一下立刻写盘并广播，切页回来状态保持；安装根目录、元数据源、镜像、代理、并发数改完点「保存」生效。
 - **文本项需要保存**：安装根目录、元数据源、镜像、代理、并发数属于「一次改一组」的参数，改动后页头出现「有未保存的修改」，点「保存」才整体生效；没改时保存按钮置灰。
 
 「版本与更新」卡片显示当前版本、最新版本与状态。应用启动时会自动检查一次（结果缓存 6 小时），也可以点「检查更新」强制刷新。发现新版本时可以直接「下载更新」（自动挑 Setup 或 portable 安装包并落盘后打开）或「打开发布页」。
@@ -83,7 +81,7 @@ src/
     archive.ts     zip（yauzl）/ tar.gz（tar）解压，防路径穿越
     http.ts        undici 下载（代理、重试、sha256、进度）
     registry.ts    <installRoot>/<sdk>/<version> + current 链接 + .bigenv.json
-    envManager.ts  env 脚本与 profile 标记块、按 SDK 发布全局 PATH、CLI 启动器
+    envManager.ts  按 SDK 发布全局 PATH、项目终端注入、CLI 启动器
     globalPath.ts  注册表 PATH 读写、托管条目识别、环境变更广播
     projects.ts    多项目登记、.bigenv.json 读写与按锁裁剪环境
     health.ts      占用统计、残留目录、失效链接
@@ -100,7 +98,7 @@ src/
 
 - [桌面端的技术栈与主进程分层](.agents/notes/implemented/architecture/2026-10-29-electron-desktop-shell.md)
 - [直接消费 vsources 元数据，不移植 vmr 的 Lua 运行时](.agents/notes/implemented/feature/2026-10-29-vsources-catalog-engine.md)
-- [Shell 注入与项目锁](.agents/notes/implemented/feature/2026-10-29-env-injection-and-project-lock.md)
+- [项目锁与临时环境注入](.agents/notes/implemented/feature/2026-10-29-env-injection-and-project-lock.md)
 - [全局 PATH 激活与 bigenv CLI](.agents/notes/implemented/feature/2026-10-29-global-path-and-cli.md)
 - [设置页的即时开关与更新检查](.agents/notes/implemented/feature/2026-10-29-settings-instant-toggle-and-update-check.md)
 - [打包与图标](.agents/notes/implemented/process/2026-10-29-packaging-and-icon.md)
@@ -180,7 +178,7 @@ node scripts/capture.mjs .tmp/overview.png 9333 --eval "[...document.querySelect
 node scripts/eval.mjs "await window.bigenv.installed.list()" 9333
 ```
 
-已实测走通的链路：`fd 10.5.0`（GitHub Releases zip）与 `lazygit 0.1.24`（tar.gz）完整安装、`current` 切换后 `fd --version` 跟随变化、删除当前版本后无残留链接、`env.ps1` 在新开的 PowerShell 中让 `fd` 可直接调用、项目锁文件识别已装/未装。
+已实测走通的链路：`fd 10.5.0`（GitHub Releases zip）与 `lazygit 0.1.24`（tar.gz）完整安装、`current` 切换后 `fd --version` 跟随变化、删除当前版本后无残留链接、`bigenv which node` 能指出当前激活版本、项目锁文件识别已装/未装。
 
 ## 已知限制
 
@@ -188,4 +186,4 @@ node scripts/eval.mjs "await window.bigenv.installed.list()" 9333
 - 仅 `conda` 安装器的 SDK（clang、ffmpeg、gcc、python 等）需本机已安装 conda；未内置 conda 引导。
 - 官方安装程序类包（cygwin、msys2、vscode、rustup、miniconda 等）不做静默安装，UI 提示需手动运行。
 - 元数据里 `size` 常为 `0`、部分包没有 `sum`，此时界面不显示大小、下载只校验大小。
-- 主要面向 Windows（junction、PowerShell 注入）；macOS/Linux 的路径与脚本分支已存在但未实机验证。
+- 主要面向 Windows（junction、注册表 PATH）；macOS/Linux 的路径与脚本分支已存在但未实机验证。

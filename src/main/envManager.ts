@@ -20,8 +20,10 @@ import { which } from './util';
 
 const log = createLogger('env');
 
-const MARKER_START = '# >>> bigenv initialize >>>';
-const MARKER_END = '# <<< bigenv initialize <<<';
+/** Markers used by the removed profile-injection feature; kept only to clean up old installs. */
+const LEGACY_BLOCK_START = '# >>> bigenv initialize >>>';
+const LEGACY_BLOCK_END = '# <<< bigenv initialize <<<';
+
 
 /** Primary executable per SDK, used for cheap shadowing checks. */
 const SDK_EXE_HINTS: Record<string, string> = {
@@ -282,99 +284,38 @@ export class EnvManager {
     return conflicts;
   }
 
-  private scriptPaths(): { ps1: string; cmd: string; sh: string } {
-    const dir = appPaths().envDir;
-    return { ps1: path.join(dir, 'env.ps1'), cmd: path.join(dir, 'env.cmd'), sh: path.join(dir, 'env.sh') };
-  }
-
-  private async writeScripts(injection: EnvInjection): Promise<void> {
-    const files = this.scriptPaths();
-    const psLines = [
-      '# 由 bigEnv 自动生成，请勿手动编辑。',
-      `# ${new Date().toISOString()}`,
-      ...psPathPrelude(injection.pathEntries),
-    ];
-    for (const [name, value] of Object.entries(injection.vars)) {
-      psLines.push(`$env:${name} = ${psQuote(value)}`);
+  /**
+   * Remove artifacts of the retired PowerShell-profile injection: the generated env scripts and
+   * the marker block in any existing profile. Global PATH is the only global mechanism now.
+   */
+  async cleanupLegacyInjection(): Promise<void> {
+    const envDir = appPaths().envDir;
+    for (const file of ['env.ps1', 'env.cmd', 'env.sh']) {
+      await fs.rm(path.join(envDir, file), { force: true }).catch(() => undefined);
     }
-    psLines.push('Remove-Variable __bigenv_paths -ErrorAction SilentlyContinue');
-    psLines.push('Remove-Variable __bigenv_rest -ErrorAction SilentlyContinue');
-
-    const cmdLines = ['@echo off', 'rem 由 bigEnv 自动生成，请勿手动编辑。'];
-    if (injection.pathEntries.length > 0) {
-      cmdLines.push(`set "PATH=${injection.pathEntries.join(';')};%PATH%"`);
-    }
-    for (const [name, value] of Object.entries(injection.vars)) {
-      cmdLines.push(`set "${name}=${value}"`);
-    }
-
-    const shLines = ['# 由 bigEnv 自动生成，请勿手动编辑。'];
-    if (injection.pathEntries.length > 0) {
-      shLines.push(`export PATH="${injection.pathEntries.join(':')}:$PATH"`);
-    }
-    for (const [name, value] of Object.entries(injection.vars)) {
-      shLines.push(`export ${name}="${value.replace(/"/g, '\\"')}"`);
-    }
-
-    await ensureDir(appPaths().envDir);
-    await writeFileAtomic(files.ps1, `${psLines.join('\n')}\n`);
-    await writeFileAtomic(files.cmd, `${cmdLines.join('\r\n')}\r\n`);
-    await writeFileAtomic(files.sh, `${shLines.join('\n')}\n`);
-    log.info('env scripts written', { paths: injection.pathEntries.length, vars: Object.keys(injection.vars).length });
-  }
-
-  private profileCandidates(): string[] {
     const documents = path.join(process.env.USERPROFILE ?? '', 'Documents');
-    return [
+    const profiles = [
       path.join(documents, 'PowerShell', 'Microsoft.PowerShell_profile.ps1'),
       path.join(documents, 'WindowsPowerShell', 'Microsoft.PowerShell_profile.ps1'),
     ];
-  }
-
-  private hookBlock(): string {
-    const envScript = this.scriptPaths().ps1.replace(/\\/g, '/');
-    return [
-      MARKER_START,
-      '# 由 bigEnv 自动生成。删除本段注释包裹的三行即可关闭自动注入。',
-      `$__bigenvEnv = '${envScript.replace(/'/g, "''")}'`,
-      'if (Test-Path -LiteralPath $__bigenvEnv) { . $__bigenvEnv }',
-      'Remove-Variable __bigenvEnv -ErrorAction SilentlyContinue',
-      MARKER_END,
-    ].join('\n');
-  }
-
-  private stripHook(content: string): string {
-    const start = content.indexOf(MARKER_START);
-    if (start < 0) return content;
-    const end = content.indexOf(MARKER_END, start);
-    if (end < 0) return content;
-    return content.slice(0, start) + content.slice(end + MARKER_END.length);
-  }
-
-  async info(): Promise<ShellInfo> {
-    const injection = await this.computeInjection();
-    const pathState = await this.pathInfo();
-    const profiles = this.profileCandidates().filter((p) => p.length > 0);
-    let profilePath: string | null = profiles[0] ?? null;
-    let enabled = false;
     for (const profile of profiles) {
       try {
         const content = await fs.readFile(profile, 'utf8');
-        if (content.includes(MARKER_START)) {
-          enabled = true;
-          profilePath = profile;
-          break;
-        }
+        if (!content.includes(LEGACY_BLOCK_START)) continue;
+        const start = content.indexOf(LEGACY_BLOCK_START);
+        const end = content.indexOf(LEGACY_BLOCK_END, start);
+        const cleaned = (start + end > start ? content.slice(0, start) + content.slice(end + LEGACY_BLOCK_END.length) : content).trimEnd();
+        await writeFileAtomic(profile, cleaned.length > 0 ? `${cleaned}\n` : '');
+        log.info('legacy profile block removed', { profile });
       } catch {
-        /* profile may not exist yet */
+        /* profile missing or unreadable */
       }
     }
+  }
+
+  async info(): Promise<ShellInfo> {
+    const pathState = await this.pathInfo();
     return {
-      envScriptPath: this.scriptPaths().ps1,
-      profilePath,
-      enabled,
-      pathEntries: injection.pathEntries,
-      vars: injection.vars,
       pathMode: pathState.mode,
       pathSdks: this.getSettings().pathSdks,
       globalEntries: pathState.entries,
@@ -387,64 +328,15 @@ export class EnvManager {
   }
 
   async refresh(): Promise<ShellInfo> {
-    const injection = await this.computeInjection();
-    await this.writeScripts(injection);
     await this.ensureCliLauncher().catch((err: unknown) => {
       log.warn('cli launcher failed', err instanceof Error ? err.message : String(err));
     });
     const settings = this.getSettings();
-    if (settings.shellEnabled) {
-      await this.installHook().catch((err: unknown) => {
-        log.warn('refresh hook failed', err instanceof Error ? err.message : String(err));
-      });
-    }
     if (settings.pathMode !== 'off') {
       await this.setPathMode(settings.pathMode).catch((err: unknown) => {
         log.warn('global path refresh failed', err instanceof Error ? err.message : String(err));
       });
     }
-    return await this.info();
-  }
-
-  private async installHook(): Promise<void> {
-    const block = this.hookBlock();
-    for (const profile of this.profileCandidates()) {
-      await ensureDir(path.dirname(profile));
-      let content = '';
-      try {
-        content = await fs.readFile(profile, 'utf8');
-      } catch {
-        content = '';
-      }
-      const cleaned = this.stripHook(content).replace(/\s+$/, '');
-      const next = cleaned.length > 0 ? `${cleaned}\n\n${block}\n` : `${block}\n`;
-      await writeFileAtomic(profile, next);
-    }
-  }
-
-  private async removeHook(): Promise<void> {
-    for (const profile of this.profileCandidates()) {
-      try {
-        const content = await fs.readFile(profile, 'utf8');
-        if (!content.includes(MARKER_START)) continue;
-        const cleaned = this.stripHook(content).replace(/\s+$/, '');
-        await writeFileAtomic(profile, cleaned.length > 0 ? `${cleaned}\n` : '');
-      } catch {
-        /* nothing to clean */
-      }
-    }
-  }
-
-  async enable(): Promise<ShellInfo> {
-    await this.refresh();
-    await this.installHook();
-    log.info('shell hook enabled');
-    return await this.info();
-  }
-
-  async disable(): Promise<ShellInfo> {
-    await this.removeHook();
-    log.info('shell hook disabled');
     return await this.info();
   }
 
