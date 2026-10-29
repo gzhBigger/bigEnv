@@ -93,7 +93,7 @@ code,
 /* ---------------------------------------------------------------- sidebar */
 
 .sidebar {
-  background: linear-gradient(180deg, light-dark(#ffffff, #0d131b) 0%, light-dark(#f6f8fc, #0a0e13) 100%);
+  background: linear-gradient(180deg, light-dark(#f0f4fa, #0d131b) 0%, light-dark(#e8edf6, #0a0e13) 100%);
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
