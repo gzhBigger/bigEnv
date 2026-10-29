@@ -84,6 +84,23 @@ pnpm verify-notes   # 校验 .agents/notes 的结构与格式
 > npx electron . --remote-debugging-port=9333
 > ```
 
+## 打包与分发
+
+```powershell
+pnpm dist      # build 之后调 electron-builder，产物在 release/
+pnpm icon      # 重新生成 build/icon.png 与 build/icon.ico
+```
+
+`release/` 里有三种形态，任选其一：
+
+| 产物 | 用途 |
+| --- | --- |
+| `bigEnv 0.1.0.exe` | portable 单文件：双击直接运行，自解压到临时目录，不写注册表 |
+| `bigEnv Setup 0.1.0.exe` | NSIS 安装包：可选安装目录、开始菜单快捷方式、自带卸载器 |
+| `win-unpacked\bigEnv.exe` | 免安装目录版，排查问题用 |
+
+图标由 `scripts/make-icon.mjs` 用 Electron 渲染 512×512 后打包成多尺寸 ICO，不依赖任何绘图库。安装包**未做代码签名**，首次运行 Windows 会提示「未知发布者」，选择「更多信息 → 仍要运行」即可。
+
 ## 数据与磁盘布局
 
 ```

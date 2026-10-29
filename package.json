@@ -17,7 +17,8 @@
     "start": "npm run build && node scripts/start.mjs",
     "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit",
     "dist": "npm run build && electron-builder --win",
-    "verify-notes": "npx tsx \"C:/Users/gzh33/.agents/skills/write-notes-like-deepseek/scripts/verify-agent-note-tree.ts\" && npx tsx \"C:/Users/gzh33/.agents/skills/write-notes-like-deepseek/scripts/verify-agent-note-format.ts\" && npx tsx \"C:/Users/gzh33/.agents/skills/write-notes-like-deepseek/scripts/verify-archived-agent-notes.ts\""
+    "verify-notes": "npx tsx \"C:/Users/gzh33/.agents/skills/write-notes-like-deepseek/scripts/verify-agent-note-tree.ts\" && npx tsx \"C:/Users/gzh33/.agents/skills/write-notes-like-deepseek/scripts/verify-agent-note-format.ts\" && npx tsx \"C:/Users/gzh33/.agents/skills/write-notes-like-deepseek/scripts/verify-archived-agent-notes.ts\"",
+    "icon": "electron scripts/make-icon.mjs"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
@@ -57,9 +58,11 @@
     },
     "files": [
       "out/**/*",
-      "package.json"
+      "package.json",
+      "build/icon.png"
     ],
     "win": {
+      "icon": "build/icon.ico",
       "target": [
         "nsis",
         "portable"
@@ -67,7 +70,8 @@
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "bigEnv"
     }
   }
 }

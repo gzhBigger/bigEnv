@@ -1,4 +1,5 @@
 import { app, BrowserWindow, session, shell } from 'electron';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { AppRuntime } from './app';
 import { registerIpc } from './ipc';
@@ -54,7 +55,9 @@ async function bootstrap(): Promise<void> {
 }
 
 function createWindow(): void {
+  const icon = path.join(app.getAppPath(), 'build', 'icon.png');
   mainWindow = new BrowserWindow({
+    icon: existsSync(icon) ? icon : undefined,
     width: 1320,
     height: 860,
     minWidth: 1040,
