@@ -67,6 +67,11 @@ const bridge: Bridge = {
     state: () => ipcRenderer.sendSync('bigenv:window:state:sync') as WindowState,
     onState: subscribe<WindowState>('bigenv:window:state'),
   },
+  updates: {
+    check: (force) => invoke('bigenv:updates:check', force === true),
+    download: () => invoke<string>('bigenv:updates:download'),
+    openPage: () => invoke('bigenv:updates:openPage'),
+  },
   health: {
     scan: () => invoke('bigenv:health:scan'),
     clean: (options) => invoke('bigenv:health:clean', options),

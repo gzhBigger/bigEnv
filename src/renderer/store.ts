@@ -9,6 +9,7 @@ import type {
   Settings,
   ShellInfo,
   ThemeMode,
+  UpdateInfo,
   VersionOption,
 } from '../shared/types';
 import { bridge } from './lib/bridge';
@@ -65,6 +66,10 @@ interface AppState {
   /** 正在提交的 SDK 勾选集合，用于让复选框先乐观切换再显示写入结果。 */
   pathSdksPending: string[] | null;
   pathError: string | null;
+  /** GitHub 上的最新版本信息，undefined 表示还没查过。 */
+  update: UpdateInfo | null;
+  checkingUpdate: boolean;
+  downloadingUpdate: boolean;
 
   init(): Promise<void>;
   setPage(page: PageKey): void;
@@ -91,6 +96,8 @@ interface AppState {
   setPathSdks(sdks: string[]): Promise<void>;
   /** Switches the palette immediately, then persists it in settings.json. */
   setTheme(mode: ThemeMode): Promise<void>;
+  checkUpdate(force?: boolean): Promise<void>;
+  downloadUpdate(): Promise<void>;
   scanHealth(): Promise<void>;
   cleanHealth(options: { cache?: boolean; orphans?: boolean }): Promise<void>;
   notify(text: string, kind?: 'ok' | 'err'): void;
@@ -117,6 +124,9 @@ export const useApp = create<AppState>((set, get) => ({
   pathModePending: null,
   pathSdksPending: null,
   pathError: null,
+  update: null,
+  checkingUpdate: false,
+  downloadingUpdate: false,
 
   async init() {
     bridge.events.onJob((job) => {
@@ -167,6 +177,8 @@ export const useApp = create<AppState>((set, get) => ({
     await get().refreshCatalog();
     void get().loadShell();
     void get().loadProjects();
+    // Silent startup check; the cached answer avoids hitting GitHub on every launch.
+    void get().checkUpdate();
   },
 
   setPage(page) {
@@ -375,7 +387,8 @@ export const useApp = create<AppState>((set, get) => ({
   async toggleShell(enabled) {
     try {
       const shell = enabled ? await bridge.env.enable() : await bridge.env.disable();
-      set({ shell });
+      // enable()/disable() persist the flag on the main side; mirror it into the store.
+      set({ shell, settings: await bridge.settings.get() });
       get().notify(enabled ? '已注入 Shell 配置' : '已移除 Shell 配置');
     } catch (error) {
       get().notify(`操作失败：${(error as Error).message}`, 'err');
@@ -416,6 +429,37 @@ export const useApp = create<AppState>((set, get) => ({
     } catch (error) {
       applyTheme(get().settings?.theme ?? 'system');
       get().notify(`主题保存失败：${errorText(error)}`, 'err');
+    }
+  },
+
+  async checkUpdate(force = false) {
+    if (get().checkingUpdate) return;
+    set({ checkingUpdate: true });
+    try {
+      const update = await bridge.updates.check(force);
+      set({ update });
+      if (update.available) get().notify(`发现新版本 ${update.latest}`, 'ok');
+      else if (force) {
+        get().notify(update.status === 'none' ? '仓库还没有发布版本' : update.status === 'error' ? '检查更新失败，请稍后再试' : '已经是最新版本');
+      }
+    } catch (error) {
+      get().notify(`检查更新失败：${errorText(error)}`, 'err');
+    } finally {
+      set({ checkingUpdate: false });
+    }
+  },
+
+  async downloadUpdate() {
+    if (get().downloadingUpdate) return;
+    set({ downloadingUpdate: true });
+    try {
+      const file = await bridge.updates.download();
+      get().notify('安装包已下载，正在打开…');
+      await bridge.system.openPath(file);
+    } catch (error) {
+      get().notify(`下载失败：${errorText(error)}`, 'err');
+    } finally {
+      set({ downloadingUpdate: false });
     }
   },
 

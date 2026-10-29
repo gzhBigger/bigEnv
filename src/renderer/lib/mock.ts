@@ -550,6 +550,21 @@ export function createMockBridge(): Bridge {
       state: () => ({ maximized: false, focused: true }),
       onState: () => () => undefined,
     },
+    updates: {
+      check: async () => ({
+        current: '0.1.0',
+        latest: null,
+        status: 'none' as const,
+        available: false,
+        notes: null,
+        pageUrl: 'https://github.com/gzh330205/bigEnv/releases/latest',
+        setupUrl: null,
+        portableUrl: null,
+        checkedAt: new Date().toISOString(),
+      }),
+      download: async () => 'D:\\demo\\bigEnv-setup.exe',
+      openPage: async () => undefined,
+    },
     health: {
       scan: async () => {
         await delay(200);

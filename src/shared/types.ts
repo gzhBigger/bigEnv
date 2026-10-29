@@ -198,6 +198,22 @@ export interface HealthReport {
   brokenCurrentLinks: string[];
 }
 
+/** Result of asking GitHub for a newer build of bigEnv itself. */
+export type UpdateStatus = 'latest' | 'available' | 'none' | 'error' | 'unknown';
+
+export interface UpdateInfo {
+  current: string;
+  latest: string | null;
+  status: UpdateStatus;
+  available: boolean;
+  notes: string | null;
+  pageUrl: string;
+  setupUrl: string | null;
+  portableUrl: string | null;
+  checkedAt: string;
+  error?: string;
+}
+
 export interface Bridge {
   catalog: {
     list(): Promise<SdkSummary[]>;
@@ -247,6 +263,11 @@ export interface Bridge {
   };
   /** Frameless window controls drawn by the renderer. */
   window: WindowBridge;
+  updates: {
+    check(force?: boolean): Promise<UpdateInfo>;
+    download(): Promise<string>;
+    openPage(): Promise<void>;
+  };
   health: {
     scan(): Promise<HealthReport>;
     clean(options: { cache?: boolean; orphans?: boolean }): Promise<HealthReport>;

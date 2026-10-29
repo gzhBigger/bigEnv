@@ -11,6 +11,7 @@ import { initLogger } from './logger';
 import { appPaths } from './paths';
 import { ProjectService } from './projects';
 import { Registry } from './registry';
+import { UpdateService } from './updates';
 import { getSettings, hasExplicitPathSdks, loadSettings, updateSettings } from './store';
 import { mapLimit } from './util';
 import { MetadataService } from './versions';
@@ -25,6 +26,7 @@ export class AppRuntime {
   readonly jobs: JobQueue;
   readonly catalog: CatalogService;
   readonly metadata: MetadataService;
+  readonly updates: UpdateService;
 
   private http: HttpClient;
   private caps: Capabilities;
@@ -35,6 +37,7 @@ export class AppRuntime {
     this.http = createHttpClient(settings.proxy);
     this.metadata = new MetadataService(this.http, settings.metaBase, appPaths().metaDir);
     this.catalog = new CatalogService(this.metadata, caps);
+    this.updates = new UpdateService(this.http);
     this.env = new EnvManager(this.registry, getSettings);
     this.projects = new ProjectService(this.registry);
     this.health = new HealthService(this.registry, getSettings, () => ({
@@ -130,6 +133,7 @@ export class AppRuntime {
       this.http.dispose();
       this.http = createHttpClient(next.proxy);
       this.metadata.setSource(this.http, next.metaBase, appPaths().metaDir);
+      this.updates.setClient(this.http);
       this.catalog.setCapabilities(this.caps);
     }
     if (previous.installRoot !== next.installRoot) {

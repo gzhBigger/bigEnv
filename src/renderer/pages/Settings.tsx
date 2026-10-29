@@ -1,6 +1,6 @@
 import type { JSX } from 'react';
 import { useEffect, useState } from 'react';
-import { Check, FolderSearch } from 'lucide-react';
+import { Check, Download, FolderSearch, RefreshCw, RotateCw } from 'lucide-react';
 import { bridge } from '../lib/bridge';
 import { useApp } from '../store';
 import type { MirrorMode, Settings as SettingsShape } from '../../shared/types';
@@ -11,10 +11,24 @@ const META_BASES = [
   { value: 'https://gh-proxy.com/https://raw.githubusercontent.com/gvcgo/vsources/main', label: 'gh-proxy 加速' },
 ];
 
+const UPDATE_STATUS: Record<string, string> = {
+  latest: '已经是最新版本',
+  available: '有新版本可用',
+  none: '仓库还没有发布版本',
+  error: '检查更新失败',
+  unknown: '尚未检查',
+};
+
 export function Settings(): JSX.Element {
   const settings = useApp((state) => state.settings);
   const saveSettings = useApp((state) => state.saveSettings);
+  const toggleShell = useApp((state) => state.toggleShell);
   const busy = useApp((state) => state.busy);
+  const update = useApp((state) => state.update);
+  const checkingUpdate = useApp((state) => state.checkingUpdate);
+  const downloadingUpdate = useApp((state) => state.downloadingUpdate);
+  const checkUpdate = useApp((state) => state.checkUpdate);
+  const downloadUpdate = useApp((state) => state.downloadUpdate);
   const [draft, setDraft] = useState<SettingsShape | null>(settings);
 
   useEffect(() => {
@@ -25,20 +39,34 @@ export function Settings(): JSX.Element {
 
   const patch = (values: Partial<SettingsShape>): void => setDraft({ ...draft, ...values });
 
+  // Text fields still need an explicit save; switches persist immediately so a
+  // stray navigation does not silently undo them.
+  const dirty = Boolean(
+    settings
+      && (draft.installRoot !== settings.installRoot
+        || draft.metaBase !== settings.metaBase
+        || draft.mirror !== settings.mirror
+        || draft.proxy !== settings.proxy
+        || draft.concurrency !== settings.concurrency),
+  );
+
   const pickRoot = async (): Promise<void> => {
     const picked = await bridge.system.pickDirectory();
     if (picked) patch({ installRoot: picked });
   };
+
+  const updatesBusy = checkingUpdate || downloadingUpdate;
 
   return (
     <>
       <div className="page-head">
         <div>
           <h1>设置</h1>
-          <p>安装位置、元数据源与下载镜像都会即时生效；修改安装根目录后需要重新扫描已有版本。</p>
+          <p>开关与主题即时生效；安装位置、元数据源与代理改完点“保存”后生效。</p>
         </div>
         <div className="actions">
-          <button type="button" className="btn primary" disabled={busy === 'settings'} onClick={() => void saveSettings(draft)}>
+          {dirty ? <span className="tag amber">有未保存的修改</span> : null}
+          <button type="button" className="btn primary" disabled={busy === 'settings' || !dirty} onClick={() => void saveSettings(draft)}>
             <Check size={13} /> 保存
           </button>
         </div>
@@ -120,24 +148,72 @@ export function Settings(): JSX.Element {
               </div>
               <button
                 type="button"
-                className={`switch ${draft.showUnsupported ? 'on' : ''}`}
+                className={`switch ${settings?.showUnsupported ? 'on' : ''}`}
                 aria-label="显示不可安装 SDK"
-                onClick={() => patch({ showUnsupported: !draft.showUnsupported })}
+                disabled={busy === 'settings'}
+                onClick={() => void saveSettings({ showUnsupported: !settings?.showUnsupported })}
               />
             </div>
             <div className="divider" />
             <div className="spread" style={{ padding: '6px 0' }}>
               <div>
                 <div>注入 PowerShell 配置</div>
-                <div className="desc">启动新终端时自动加载 bigEnv 的 PATH 与变量。</div>
+                <div className="desc">把一个带标记的初始化脚本写进 `$PROFILE`，新开终端自动带上 bigEnv 的 PATH 与变量。</div>
               </div>
               <button
                 type="button"
-                className={`switch ${draft.shellEnabled ? 'on' : ''}`}
+                className={`switch ${settings?.shellEnabled ? 'on' : ''}`}
                 aria-label="注入 PowerShell 配置"
-                onClick={() => patch({ shellEnabled: !draft.shellEnabled })}
+                onClick={() => void toggleShell(!settings?.shellEnabled)}
               />
             </div>
+          </div>
+
+          <div className="card" style={{ marginBottom: 14 }}>
+            <div className="card-head">
+              <h2>版本与更新</h2>
+            </div>
+            <dl className="kv">
+              <dt>当前版本</dt>
+              <dd className="mono">{update?.current ?? bridge.runtime.version}</dd>
+              <dt>最新版本</dt>
+              <dd className="mono">{update?.latest ?? '—'}</dd>
+              <dt>状态</dt>
+              <dd>
+                {update?.available ? (
+                  <span className="tag green">{UPDATE_STATUS.available}</span>
+                ) : update?.status === 'error' ? (
+                  <span className="tag red">{UPDATE_STATUS.error}</span>
+                ) : (
+                  UPDATE_STATUS[update?.status ?? 'unknown']
+                )}
+              </dd>
+            </dl>
+            {update?.error ? <div className="desc mono" style={{ marginTop: 6 }}>{update.error}</div> : null}
+            {update?.available ? (
+              <div className="row" style={{ marginTop: 10 }}>
+                <button type="button" className="btn primary" disabled={updatesBusy} onClick={() => void downloadUpdate()}>
+                  {downloadingUpdate ? <RefreshCw size={13} className="spin" /> : <Download size={13} />}
+                  {downloadingUpdate ? '正在下载…' : '下载更新'}
+                </button>
+                <button type="button" className="btn ghost" onClick={() => void bridge.updates.openPage()}>
+                  打开发布页
+                </button>
+              </div>
+            ) : (
+              <div className="row" style={{ marginTop: 10 }}>
+                <button type="button" className="btn" disabled={updatesBusy} onClick={() => void checkUpdate(true)}>
+                  {checkingUpdate ? <RefreshCw size={13} className="spin" /> : <RotateCw size={13} />}
+                  {checkingUpdate ? '正在检查…' : '检查更新'}
+                </button>
+                {update?.notes ? null : (
+                  <button type="button" className="btn ghost" onClick={() => void bridge.updates.openPage()}>
+                    打开发布页
+                  </button>
+                )}
+              </div>
+            )}
+            {update?.available ? <div className="hint-text" style={{ marginTop: 8 }}>下载完成后会直接打开安装包；当前版本没有代码签名，Windows 可能提示 SmartScreen。</div> : null}
           </div>
 
           <div className="card">

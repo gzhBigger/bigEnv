@@ -17,6 +17,7 @@
 - **项目环境**：登记多个项目目录，每个目录单独勾选要用哪些 SDK、哪个版本，写入该目录下的 `.bigenv.json`；打开终端或 `bigenv run` 时只激活勾选的 SDK。锁里记录但已经卸载的 SDK 仍会列出（标记「未安装」），取消勾选就能把它从配置里移除。格式只认 bigEnv 自己的 JSON 对象，不再兼容 `.vmr.lock`。
 - **体检与清理**：统计安装占用与下载缓存，找出没有元数据的残留版本目录、失效的 `current` 链接，一键清理缓存或残留目录。
 - **队列可控**：任务面板可随时关闭，安装队列页可一键清空已完成记录（历史只保留最近 30 条）。
+- **版本与更新**：设置页挂出当前版本与最新版本，启动时自动检查（缓存 6 小时），发现新版本可以一键下载 Setup 或 portable 安装包，也可以打开 GitHub 发布页手动下载。
 - **主题**：标题栏右上角的切换器支持「随系统 / 明亮 / 暗色」三档，Linux/macOS 与 Windows 的浅色、深色都做了配色（CSS `light-dark()`），选择会立即生效并记住；「随系统」会跟随操作系统实时切换。窗口是无边框的，右上角的最小化/最大化/关闭由应用自绘，尺寸一致、深浅配色统一。零配置可用，元数据源、镜像、代理、并发数、安装根目录都可在设置里改。
 
 | SDK 目录 | 项目环境 |
@@ -59,6 +60,17 @@ bigenv use node@24.4.0          # 切换 current
 
 `bigenv run` 会从当前目录向上找 `.bigenv.json` / `bigenv.json`，所以 AI agent 或构建脚本在项目里直接调它就能拿到正确版本，不需要 UI 或先开终端。
 
+## 设置与更新
+
+设置页把「即时生效」和「需要保存」分开：
+
+- **开关即时生效**：主题、显示不可安装的 SDK、注入 PowerShell 配置——点一下立刻写盘并广播，不需要再点保存。Shell 注入的开关同时负责写入/移除 profile 里的标记块，切页回来状态保持。
+- **文本项需要保存**：安装根目录、元数据源、镜像、代理、并发数属于「一次改一组」的参数，改动后页头出现「有未保存的修改」，点「保存」才整体生效；没改时保存按钮置灰。
+
+「版本与更新」卡片显示当前版本、最新版本与状态。应用启动时会自动检查一次（结果缓存 6 小时），也可以点「检查更新」强制刷新。发现新版本时可以直接「下载更新」（自动挑 Setup 或 portable 安装包并落盘后打开）或「打开发布页」。
+
+检查走三级回退，避免被限流卡死：GitHub Releases API → 抓取 releases 页面 HTML → 读取仓库里的 `package.json` 版本；仓库还没有正式 Release 时显示「仓库还没有发布版本」，检查失败会给出原因而不是静默。更新源指向 [gzhBigger/bigEnv](https://github.com/gzhBigger/bigEnv)（仓库改名前的 `gzh330205` 会 301 到新地址）。
+
 ## 架构
 
 ```
@@ -90,6 +102,7 @@ src/
 - [直接消费 vsources 元数据，不移植 vmr 的 Lua 运行时](.agents/notes/implemented/feature/2026-10-29-vsources-catalog-engine.md)
 - [Shell 注入与项目锁](.agents/notes/implemented/feature/2026-10-29-env-injection-and-project-lock.md)
 - [全局 PATH 激活与 bigenv CLI](.agents/notes/implemented/feature/2026-10-29-global-path-and-cli.md)
+- [设置页的即时开关与更新检查](.agents/notes/implemented/feature/2026-10-29-settings-instant-toggle-and-update-check.md)
 - [打包与图标](.agents/notes/implemented/process/2026-10-29-packaging-and-icon.md)
 - [用 CDP 脚本验证界面](.agents/notes/implemented/process/2026-10-29-verification-harness.md)
 

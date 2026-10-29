@@ -101,11 +101,13 @@ export function registerIpc(runtime: AppRuntime): void {
 
   ipcMain.handle('bigenv:env:info', async () => await runtime.env.info());
   ipcMain.handle('bigenv:env:enable', async () => {
-    await runtime.applySettings({ shellEnabled: true });
+    const settings = await runtime.applySettings({ shellEnabled: true });
+    broadcast('bigenv:settings', settings);
     return await runtime.env.enable();
   });
   ipcMain.handle('bigenv:env:disable', async () => {
-    await runtime.applySettings({ shellEnabled: false });
+    const settings = await runtime.applySettings({ shellEnabled: false });
+    broadcast('bigenv:settings', settings);
     return await runtime.env.disable();
   });
   ipcMain.handle('bigenv:env:openTerminal', async (_event, dir: unknown) => {
@@ -221,6 +223,10 @@ export function registerIpc(runtime: AppRuntime): void {
     const win = BrowserWindow.fromWebContents(event.sender);
     event.returnValue = win ? windowStateOf(win) : { maximized: false, focused: false };
   });
+
+  ipcMain.handle('bigenv:updates:check', async (_event, force: unknown) => await runtime.updates.check(force === true));
+  ipcMain.handle('bigenv:updates:download', async () => (await runtime.updates.download()).path);
+  ipcMain.handle('bigenv:updates:openPage', async () => await runtime.updates.openPage());
 
   ipcMain.handle('bigenv:health:scan', async () => await runtime.health.scan());
   ipcMain.handle('bigenv:health:clean', async (_event, options: unknown) => {
