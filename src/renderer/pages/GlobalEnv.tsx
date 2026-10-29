@@ -105,15 +105,16 @@ export function GlobalEnv(): JSX.Element {
         </div>
         <div className="spread" style={{ alignItems: 'flex-start' }}>
           <div style={{ fontSize: 12.5, color: 'var(--muted)', maxWidth: 540 }}>
-            用户 PATH 立即生效、无需管理员；系统 PATH 对所有账户生效，但需要以管理员身份运行 bigEnv。
-            关闭时会移除 bigEnv 写入的所有条目，不动其它内容。
+            用户 PATH 立即生效、不需要额外授权；系统 PATH 对所有账户生效，选中时会弹出一次 Windows
+            管理员授权（UAC）。关闭时会移除 bigEnv 写入的所有条目，不动其它内容。
           </div>
-          <div className="tabbar">
+          <div className="tabbar" role="group" aria-label="PATH 生效范围">
             {PATH_MODES.map((modeItem) => (
               <button
                 key={modeItem.id}
                 type="button"
-                className={shell?.pathMode === modeItem.id ? 'active' : ''}
+                className={shell?.pathMode === modeItem.id ? 'on' : ''}
+                aria-pressed={shell?.pathMode === modeItem.id}
                 disabled={writing}
                 onClick={() => applyMode(modeItem.id)}
               >
@@ -130,6 +131,7 @@ export function GlobalEnv(): JSX.Element {
               <Loader2 size={13} className="spin" />
               <span>
                 正在{mode === 'off' || pathModePending === 'off' ? '移除' : '写入'}注册表 PATH，请稍候…
+                {pathModePending === 'machine' && '（会弹出 Windows 管理员授权，请点「是」）'}
               </span>
             </div>
           </>

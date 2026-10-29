@@ -12,6 +12,7 @@ import {
   prependEntries,
   stripManaged,
 } from './globalPath';
+import type { PathScope } from './globalPath';
 import { createLogger } from './logger';
 import { appPaths } from './paths';
 import type { Registry } from './registry';
@@ -186,28 +187,40 @@ export class EnvManager {
     return uniquePaths(groups.flatMap((group) => group.dirs));
   }
 
-  async setPathMode(mode: PathMode): Promise<void> {
+  /** Removes every bigEnv-owned entry from one registry scope. */
+  async stripPathScope(scope: PathScope, options: { throwOnError?: boolean } = {}): Promise<void> {
     const matcher = makeManagedMatcher(this.getSettings().installRoot, appPaths().binDir);
+    const result = await stripManaged(scope, matcher);
+    if (!result.error) return;
+    if (options.throwOnError) throw new Error(result.error);
+    log.warn('path cleanup skipped', { scope, error: result.error });
+  }
+
+  /** Writes the current selection (launcher + enabled SDKs) into one registry scope. */
+  async writePathScope(scope: PathScope): Promise<void> {
+    const matcher = makeManagedMatcher(this.getSettings().installRoot, appPaths().binDir);
+    const entries = await this.globalEntries();
+    const launcher = await this.ensureCliLauncher();
+    const withCli = uniquePaths([path.dirname(launcher), ...entries]);
+    const result = await prependEntries(scope, withCli, matcher);
+    if (result.error) throw new Error(result.error);
+  }
+
+  async setPathMode(mode: PathMode): Promise<void> {
     if (mode === 'off') {
       for (const scope of ['user', 'machine'] as const) {
-        const result = await stripManaged(scope, matcher);
-        if (result.error) log.warn('path cleanup skipped', { scope, error: result.error });
+        await this.stripPathScope(scope);
       }
       log.info('global path disabled');
       return;
     }
-    const entries = await this.globalEntries();
-    const launcher = await this.ensureCliLauncher();
-    const withCli = uniquePaths([path.dirname(launcher), ...entries]);
+    // Publish into the target scope before cleaning the other one: if this write needs
+    // elevation and fails, the previous scope must stay intact (no half-migrated PATH).
+    await this.writePathScope(mode);
     for (const scope of ['machine', 'user'] as const) {
-      if (scope !== mode) {
-        const cleaned = await stripManaged(scope, matcher);
-        if (cleaned.error) log.warn('path cleanup skipped', { scope, error: cleaned.error });
-      }
+      if (scope !== mode) await this.stripPathScope(scope);
     }
-    const result = await prependEntries(mode, withCli, matcher);
-    if (result.error) throw new Error(result.error);
-    log.info('global path enabled', { mode, entries: withCli.length });
+    log.info('global path enabled', { mode });
   }
 
   async pathInfo(): Promise<{ mode: PathMode; entries: string[]; activeScope: 'user' | 'machine' | null; conflicts: PathConflict[] }> {

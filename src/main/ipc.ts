@@ -3,7 +3,7 @@ import type { Settings } from '../shared/types';
 import type { AppRuntime } from './app';
 import { createLogger } from './logger';
 import { appPaths } from './paths';
-import { getSettings } from './store';
+import { getSettings, updateSettings } from './store';
 
 const log = createLogger('ipc');
 
@@ -95,10 +95,34 @@ export function registerIpc(runtime: AppRuntime): void {
   });
   ipcMain.handle('bigenv:env:setPathMode', async (_event, mode: unknown) => {
     if (mode !== 'off' && mode !== 'user' && mode !== 'machine') throw new Error('非法的 PATH 模式');
-    // Publish first: a failed write (no admin rights) must not leave the setting out of sync.
-    await runtime.env.setPathMode(mode);
-    const settings = await runtime.applySettings({ pathMode: mode });
-    broadcast('bigenv:settings', settings);
+    const previous = getSettings().pathMode;
+    // Record the intent before writing: the elevated helper re-reads settings and refuses to
+    // act when the mode changed meanwhile, so this is what makes UAC approval meaningful.
+    broadcast('bigenv:settings', await updateSettings({ pathMode: mode }));
+    try {
+      // Leaving machine mode needs elevation too, because HKLM cannot be edited otherwise.
+      if (previous === 'machine' && mode !== 'machine') {
+        await runtime.applyMachinePathElevated('strip');
+      }
+      try {
+        await runtime.env.setPathMode(mode);
+      } catch (error) {
+        // HKLM needs real elevation; the click itself is the user's intent, so raise UAC now
+        // instead of bouncing a permission error back to the page.
+        const message = error instanceof Error ? error.message : String(error);
+        if (mode === 'machine' && /管理员权限/.test(message)) {
+          await runtime.applyMachinePathElevated('apply');
+        } else {
+          throw error;
+        }
+      }
+    } catch (error) {
+      // Nothing was published: restore both the stored mode and the previous scope.
+      broadcast('bigenv:settings', await updateSettings({ pathMode: previous }));
+      await runtime.env.setPathMode(previous).catch(() => undefined);
+      throw error;
+    }
+    broadcast('bigenv:settings', await runtime.applySettings({ pathMode: mode }));
     return await runtime.env.info();
   });
 

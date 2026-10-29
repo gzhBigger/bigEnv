@@ -1,5 +1,8 @@
 import type { ProjectInfo, Settings } from '../shared/types';
+import { app } from 'electron';
+import { spawn } from 'node:child_process';
 import { CatalogService, detectCapabilities, type Capabilities } from './catalog';
+import { ELEVATION_FLAG } from './elevated';
 import { EnvManager } from './envManager';
 import { HealthService } from './health';
 import { createHttpClient, type HttpClient } from './http';
@@ -141,6 +144,47 @@ export class AppRuntime {
     }
     await this.env.refresh();
     return next;
+  }
+
+  /**
+   * Machine-scope PATH lives in HKLM, so writing it needs an elevated process.
+   * The user already asked for it by clicking「系统 PATH」, so we raise the UAC prompt
+   * with the packaged executable running as a one-shot helper, wait for it, then
+   * drop the bigEnv entries from the user scope in this (non-elevated) process.
+   */
+  async applyMachinePathElevated(action: 'apply' | 'strip'): Promise<void> {
+    const exe = process.execPath;
+    const flag = `${ELEVATION_FLAG}=${action}`;
+    const args = app.isPackaged ? [flag] : [app.getAppPath(), flag];
+    const quotedExe = exe.replace(/'/g, "''");
+    const quotedArgs = args.map((arg) => `'${arg.replace(/'/g, "''")}'`).join(', ');
+    const script = `$p = Start-Process -FilePath '${quotedExe}' -ArgumentList ${quotedArgs} -Verb RunAs -Wait -PassThru; exit $p.ExitCode`;
+    const code = await new Promise<number>((resolve, reject) => {
+      const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], {
+        windowsHide: true,
+        stdio: ['ignore', 'ignore', 'pipe'],
+      });
+      let stderr = '';
+      child.stderr?.on('data', (chunk: Buffer) => {
+        stderr += chunk.toString();
+      });
+      const timer = setTimeout(() => child.kill(), 180_000);
+      child.on('error', (error) => {
+        clearTimeout(timer);
+        reject(error);
+      });
+      child.on('close', (exitCode) => {
+        clearTimeout(timer);
+        if (exitCode === 0) resolve(0);
+        else if (/canceled by the user|用户取消|操作被用户取消/i.test(stderr)) resolve(1223);
+        else resolve(exitCode ?? 1);
+      });
+    });
+    if (code === 1223) throw new Error('已取消管理员授权');
+    if (code !== 0) throw new Error('以管理员身份写入系统 PATH 失败');
+    // `apply` wrote HKLM; `strip` removed the old entries there. Either way the
+    // user-scope entries are this process's responsibility.
+    await this.env.stripPathScope('user');
   }
 
   async dispose(): Promise<void> {

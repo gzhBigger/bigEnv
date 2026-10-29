@@ -16,6 +16,7 @@ Status: implemented
 - **渲染进程与主进程的契约只有一处**：`src/shared/types.ts` 的 `Bridge` 接口。preload 用 `contextBridge` 暴露 `window.bigenv`，每个方法对应一个 `bigenv:*` `ipcMain.handle`；单向事件走四条通道（`bigenv:job` / `bigenv:installed` / `bigenv:catalog` / `bigenv:settings`）。
 - **构建**：主进程/preload 用 esbuild 打成 CJS（`out/main.cjs`、`out/preload.cjs`），渲染进程用 Vite（`out/renderer`）。两者都走 `npm run build`，`npm run dev` 同时起 vite 与 esbuild watch 再拉 Electron。
 - **窗口**：`titleBarStyle: 'hidden'` + `titleBarOverlay` 自绘标题栏；`contextIsolation: true`、`nodeIntegration: false`、`sandbox: false`（preload 需要 Node，但渲染进程仍无 Node）；生产模式由主进程注入 CSP，`index.html` 里不放 CSP meta（否则 dev 的 HMR 内联脚本被拦）。
+- **界面信息架构（第六轮反馈后）**：全局环境页的 scope 选择改成有选中态的 segmented control（`.tabbar button.on`，带 `aria-pressed`），「系统 PATH」由点击触发 UAC 而不是回显权限错误；升权写注册表走 `--bigenv-elevated-path=apply|strip` 的一次性副本（见 [全局 PATH 与 CLI](../feature/2026-10-29-global-path-and-cli.md) 的 A4）。
 - **界面信息架构（第三轮反馈后）**：新增「全局环境」页（`pages/GlobalEnv.tsx`，key `globals`）单独管理全局 PATH —— 选 `off`/`user`/`machine`，再逐 SDK 勾选哪些 `current` 目录进 PATH（`settings.pathSdks`）；「Shell 集成」只保留 PowerShell profile 注入与 env 脚本。SDK 抽屉拆成「已安装 / 可安装」两个 tab，安装动作入队后自动关闭抽屉（进度归队列面板），安装/卸载完成由主进程失效版本缓存并推事件，页面无需手动刷新。
 - **界面信息架构（第二轮反馈后）**：取消独立的「已安装」页，已安装版本并入「SDK 目录」——卡片直接列出已装版本 chips，并提供「已安装」筛选；「项目环境」页管理 `settings.projects` 里登记的多个目录，用勾选式表格决定每个目录激活哪些 SDK（保存为目录下的 `.bigenv.json`，格式见 [环境注入与项目锁](../feature/2026-10-29-env-injection-and-project-lock.md)）；安装队列的悬浮面板可关闭，队列页可一键清空已完成记录。
 

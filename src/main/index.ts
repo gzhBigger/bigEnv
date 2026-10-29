@@ -2,6 +2,7 @@ import { app, BrowserWindow, session, shell } from 'electron';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { AppRuntime } from './app';
+import { elevatedAction, runElevatedPathWrite } from './elevated';
 import { registerIpc } from './ipc';
 import { createLogger } from './logger';
 
@@ -12,7 +13,14 @@ let mainWindow: BrowserWindow | null = null;
 
 app.setName('bigEnv');
 
-if (!app.requestSingleInstanceLock()) {
+const elevated = elevatedAction(process.argv);
+if (elevated) {
+  // Elevated one-shot helper: no window, no IPC, no single-instance lock.
+  void app.whenReady().then(async () => {
+    const code = await runElevatedPathWrite(elevated);
+    app.exit(code);
+  });
+} else if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.on('second-instance', () => {

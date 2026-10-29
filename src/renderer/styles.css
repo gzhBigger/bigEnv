@@ -933,8 +933,14 @@ code,
 }
 
 .tabbar button.on {
-  background: var(--panel-3);
-  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 22%, var(--panel-3));
+  color: #e8f2ff;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent);
+  font-weight: 600;
+}
+
+.tabbar button:disabled {
+  cursor: progress;
 }
 
 .loading {
