@@ -110,10 +110,11 @@ export function Settings(): JSX.Element {
         </div>
       </div>
 
-      <div className="grid c2">
-        <div className="card">
-          <div className="card-head">
-            <h2>安装与下载</h2>
+      <div className="settings-grid">
+        <div className="settings-col">
+          <div className="card">
+            <div className="card-head">
+              <h2>安装与下载</h2>
           </div>
           <div className="field">
             <label>安装根目录</label>
@@ -172,10 +173,9 @@ export function Settings(): JSX.Element {
               onChange={(event) => patch({ concurrency: Number(event.target.value) || 1 })}
             />
           </div>
-        </div>
+          </div>
 
-        <div>
-          <div className="card" style={{ marginBottom: 14 }}>
+          <div className="card">
             <div className="card-head">
               <h2>界面</h2>
             </div>
@@ -194,7 +194,31 @@ export function Settings(): JSX.Element {
             </div>
           </div>
 
-          <div className="card" style={{ marginBottom: 14 }}>
+          <div className="card">
+            <div className="card-head">
+              <h2>关于</h2>
+            </div>
+            <dl className="kv">
+              <dt>版本</dt>
+              <dd>{bridge.runtime.version}</dd>
+              <dt>运行环境</dt>
+              <dd>
+                {bridge.runtime.platform} / {bridge.runtime.arch}
+              </dd>
+              <dt>Electron</dt>
+              <dd>{bridge.runtime.electron || '—'}</dd>
+              <dt>数据目录</dt>
+              <dd className="mono" style={{ fontSize: 11.5 }}>{bridge.runtime.dataRoot || '—'}</dd>
+            </dl>
+            <div className="divider" />
+            <div className="hint-text">
+              版本元数据来自 vsources（gvcgo/vsources）；安装布局用 <code>&lt;sdk&gt;/&lt;version&gt;</code> 加 <code>current</code> 链接，不复用 vmr 的 Lua 插件运行时。
+            </div>
+          </div>
+        </div>
+
+        <div className="settings-col">
+          <div className="card">
             <div className="card-head">
               <h2>AI 接入（MCP）</h2>
               <span className={`tag ${mcp?.running ? 'green' : mcp?.enabled ? 'amber' : ''}`}>
@@ -284,7 +308,7 @@ export function Settings(): JSX.Element {
             ) : null}
           </div>
 
-          <div className="card" style={{ marginBottom: 14 }}>
+          <div className="card">
             <div className="card-head">
               <h2>版本与更新</h2>
             </div>
@@ -329,28 +353,6 @@ export function Settings(): JSX.Element {
               </div>
             )}
             {update?.available ? <div className="hint-text" style={{ marginTop: 8 }}>下载完成后会直接打开安装包；当前版本没有代码签名，Windows 可能提示 SmartScreen。</div> : null}
-          </div>
-
-          <div className="card">
-            <div className="card-head">
-              <h2>关于</h2>
-            </div>
-            <dl className="kv">
-              <dt>版本</dt>
-              <dd>{bridge.runtime.version}</dd>
-              <dt>运行环境</dt>
-              <dd>
-                {bridge.runtime.platform} / {bridge.runtime.arch}
-              </dd>
-              <dt>Electron</dt>
-              <dd>{bridge.runtime.electron || '—'}</dd>
-              <dt>数据目录</dt>
-              <dd className="mono" style={{ fontSize: 11.5 }}>{bridge.runtime.dataRoot || '—'}</dd>
-            </dl>
-            <div className="divider" />
-            <div className="hint-text">
-              版本元数据来自 vsources（gvcgo/vsources），安装布局与 vmr 兼容；本项目为独立实现，不复用其 Lua 插件运行时。
-            </div>
           </div>
         </div>
       </div>

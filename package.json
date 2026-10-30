@@ -1,7 +1,7 @@
 {
   "name": "bigenv",
   "productName": "bigEnv",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "description": "bigEnv — 桌面端多语言运行环境管理器",
   "author": "bigEnv",
