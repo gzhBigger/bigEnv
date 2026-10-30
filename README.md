@@ -22,6 +22,7 @@
 - **队列可控**：任务面板可随时关闭，安装队列页可一键清空已完成记录（历史只保留最近 30 条）。
 - **版本与更新**：设置页挂出当前版本与最新版本，启动时自动检查（缓存 6 小时），发现新版本可以一键下载 Setup 或 portable 安装包，也可以打开 GitHub 发布页手动下载。
 - **主题**：标题栏右上角的切换器支持「随系统 / 明亮 / 暗色」三档，Linux/macOS 与 Windows 的浅色、深色都做了配色（CSS `light-dark()`），选择会立即生效并记住；「随系统」会跟随操作系统实时切换。窗口是无边框的，右上角的最小化/最大化/关闭由应用自绘，尺寸一致、深浅配色统一。零配置可用，元数据源、镜像、代理、并发数、安装根目录都可在设置里改。
+- **AI 接入（MCP）**：设置页一键开启本机 MCP 端点，把令牌填进 Claude Code、Cursor 等客户端的 `mcpServers`，AI 就能列 SDK、装版本、切 current、写项目锁、跑体检清理；端点只监听 `127.0.0.1`，关闭即停止监听。
 
 | SDK 目录 | 项目环境 |
 | --- | --- |
@@ -34,6 +35,10 @@
 | 安装队列 | 设置 |
 | --- | --- |
 | ![安装队列](docs/screenshots/jobs.png) | ![设置](docs/screenshots/settings.png) |
+
+| AI 接入（MCP） |
+| --- |
+| ![MCP](docs/screenshots/mcp.png) |
 
 | 体检与清理 |
 | --- |
@@ -73,6 +78,40 @@ bigenv use node@24.4.0          # 切换 current
 
 检查走三级回退，避免被限流卡死：GitHub Releases API → 抓取 releases 页面 HTML → 读取仓库里的 `package.json` 版本；仓库还没有正式 Release 时显示「仓库还没有发布版本」，检查失败会给出原因而不是静默。更新源指向 [gzhBigger/bigEnv](https://github.com/gzhBigger/bigEnv)（仓库改名前的 `gzh330205` 会 301 到新地址）。
 
+## AI 接入（MCP）
+
+设置页「AI 接入（MCP）」卡片可以打开一个本机 MCP 端点，让 AI 客户端直接驱动 bigEnv，而不用猜路径或手改 `.bigenv.json`。
+
+1. 打开开关，端点固定为 `http://127.0.0.1:47831/mcp`（端口可改），首次启用会自动生成访问令牌。
+2. 把卡片里的 JSON 复制到客户端的 `mcpServers` 配置，令牌放在 `Authorization: Bearer` 头里：
+
+```json
+{
+  "mcpServers": {
+    "bigenv": {
+      "type": "http",
+      "url": "http://127.0.0.1:47831/mcp",
+      "headers": { "Authorization": "Bearer <token>" }
+    }
+  }
+}
+```
+
+3. 客户端连上后可以直接说「装个 Node 24 并切过去」「这个项目锁 node 20 和 go 1.22」「清理一下下载缓存」。
+
+| 类别 | 工具 | 说明 |
+| --- | --- | --- |
+| 查询 | `bigenv_list_sdks` / `bigenv_sdk_versions` / `bigenv_list_installed` / `bigenv_which` | 目录、可安装版本、已装列表、当前版本与路径 |
+| 安装 | `bigenv_install` / `bigenv_job` / `bigenv_wait_job` / `bigenv_cancel_job` | 发起安装后可等待任务结束，与界面共用同一个队列 |
+| 版本 | `bigenv_use` / `bigenv_uninstall` | 切换 current、删除版本（同时刷新 PATH） |
+| 环境 | `bigenv_env_info` / `bigenv_set_path_mode` / `bigenv_set_path_sdks` | 查看或修改全局 PATH 范围与参与发布的 SDK（系统 PATH 会弹 UAC） |
+| 项目 | `bigenv_projects` / `bigenv_project_save` / `bigenv_project_add` / `bigenv_project_remove` | 读、写 `.bigenv.json`，登记/移除项目目录 |
+| 维护 | `bigenv_health` / `bigenv_clean` / `bigenv_check_updates` / `bigenv_open_terminal` | 体检、清缓存/残留、检查更新、按锁打开终端 |
+
+端点是**无状态**的 Streamable HTTP：每个请求现场创建 server 与 transport，不维护会话，也不支持 `GET` 的 SSE 流。绑定地址固定 `127.0.0.1`，令牌用常量时间比较；关掉开关立即停止监听。令牌等同于本机安装目录的写权限，不要写进公开仓库；怀疑泄露时点「重新生成」，旧令牌立刻失效。
+
+写操作走的是界面同一套服务：安装仍经过下载校验、并发队列与失败清理，切换版本仍会刷新 `current` 链接与全局 PATH，所以 AI 看到的状态和界面里的一致。系统 PATH 的写入依然需要用户在 UAC 弹窗里点「是」，MCP 调用不能代替这一步。
+
 ## 架构
 
 ```
@@ -89,6 +128,7 @@ src/
     globalPath.ts  注册表 PATH 读写、托管条目识别、环境变更广播
     projects.ts    多项目登记、.bigenv.json 读写与按锁裁剪环境
     health.ts      占用统计、残留目录、失效链接
+    mcp.ts         本机 MCP 端点（令牌鉴权、21 个 bigenv_* 工具）
     ipc.ts         bigenv:* 通道
   cli/         独立的 bigenv CLI（不依赖 electron，打包进 resources/cli.cjs）
   preload/     contextBridge 暴露 window.bigenv（Bridge 接口）

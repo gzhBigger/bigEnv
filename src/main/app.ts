@@ -1,4 +1,4 @@
-import type { ProjectInfo, Settings } from '../shared/types';
+import type { PathMode, ProjectInfo, Settings, ShellInfo } from '../shared/types';
 import { app } from 'electron';
 import { spawn } from 'node:child_process';
 import { CatalogService, detectCapabilities, type Capabilities } from './catalog';
@@ -8,6 +8,7 @@ import { HealthService } from './health';
 import { createHttpClient, type HttpClient } from './http';
 import { JobQueue } from './jobs';
 import { initLogger } from './logger';
+import { McpService } from './mcp';
 import { appPaths } from './paths';
 import { ProjectService } from './projects';
 import { Registry } from './registry';
@@ -27,6 +28,7 @@ export class AppRuntime {
   readonly catalog: CatalogService;
   readonly metadata: MetadataService;
   readonly updates: UpdateService;
+  readonly mcp: McpService;
 
   private http: HttpClient;
   private caps: Capabilities;
@@ -57,6 +59,7 @@ export class AppRuntime {
       },
     });
     this.catalog.setInstalledProvider(async () => await this.installedSnapshot());
+    this.mcp = new McpService(this, app.getVersion());
   }
 
   private async installedSnapshot(): Promise<Map<string, { versions: Set<string>; current: string | null }>> {
@@ -86,6 +89,7 @@ export class AppRuntime {
     await runtime.env.cleanupLegacyInjection().catch((err: unknown) => {
       console.warn('[app] legacy shell cleanup failed', err instanceof Error ? err.message : String(err));
     });
+    if (getSettings().mcpEnabled) await runtime.mcp.start();
     return runtime;
   }
 
@@ -149,7 +153,43 @@ export class AppRuntime {
       await this.env.setPathMode('off');
     }
     await this.env.refresh();
+    if (previous.mcpEnabled !== next.mcpEnabled || previous.mcpPort !== next.mcpPort) {
+      if (next.mcpEnabled) await this.mcp.start();
+      else await this.mcp.stop();
+    }
     return next;
+  }
+
+  /**
+   * Publish or retract the global PATH entries, raising UAC when the target scope is
+   * machine-wide. The intent is stored before the registry write so the elevated helper
+   * can verify that the user still wants it, and rolled back if the write fails.
+   */
+  async setPathMode(mode: PathMode): Promise<ShellInfo> {
+    const previous = getSettings().pathMode;
+    await updateSettings({ pathMode: mode });
+    try {
+      // Leaving machine mode needs elevation too, because HKLM cannot be edited otherwise.
+      if (previous === 'machine' && mode !== 'machine') {
+        await this.applyMachinePathElevated('strip');
+      }
+      try {
+        await this.env.setPathMode(mode);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (mode === 'machine' && /管理员权限/.test(message)) {
+          await this.applyMachinePathElevated('apply');
+        } else {
+          throw error;
+        }
+      }
+    } catch (error) {
+      await updateSettings({ pathMode: previous });
+      await this.env.setPathMode(previous).catch(() => undefined);
+      throw error;
+    }
+    await this.applySettings({ pathMode: mode });
+    return await this.env.info();
   }
 
   /**
@@ -194,6 +234,7 @@ export class AppRuntime {
   }
 
   async dispose(): Promise<void> {
+    await this.mcp.stop().catch(() => undefined);
     this.http.dispose();
   }
 }

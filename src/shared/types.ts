@@ -30,6 +30,17 @@ export type PathMode = 'off' | 'user' | 'machine';
 /** `system` follows the OS appearance; the other two pin the palette. */
 export type ThemeMode = 'system' | 'light' | 'dark';
 
+/** Local MCP endpoint state, shown on the settings page. */
+export interface McpStatus {
+  enabled: boolean;
+  running: boolean;
+  port: number;
+  url: string;
+  token: string;
+  toolCount: number;
+  error?: string;
+}
+
 export interface Settings {
   /** Directory that holds `<sdk>/<version>` install trees. */
   installRoot: string;
@@ -51,6 +62,12 @@ export interface Settings {
   projects: string[];
   /** Color scheme for the app shell. */
   theme: ThemeMode;
+  /** Serve the local MCP endpoint that lets AI agents drive bigEnv. */
+  mcpEnabled: boolean;
+  /** Loopback port for the MCP endpoint. */
+  mcpPort: number;
+  /** Bearer token required by the MCP endpoint; empty until first enabled. */
+  mcpToken: string;
 }
 
 export interface SdkSummary {
@@ -259,6 +276,13 @@ export interface Bridge {
     check(force?: boolean): Promise<UpdateInfo>;
     download(): Promise<string>;
     openPage(): Promise<void>;
+  };
+  mcp: {
+    status(): Promise<McpStatus>;
+    /** Toggle the endpoint; enabling starts the loopback server. */
+    setEnabled(enabled: boolean): Promise<McpStatus>;
+    setPort(port: number): Promise<McpStatus>;
+    rotateToken(): Promise<McpStatus>;
   };
   health: {
     scan(): Promise<HealthReport>;

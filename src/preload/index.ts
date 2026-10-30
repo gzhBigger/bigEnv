@@ -1,5 +1,14 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { Bridge, InstallRecord, JobState, ProjectInfo, Settings, SdkSummary, WindowState } from '../shared/types';
+import type {
+  Bridge,
+  InstallRecord,
+  JobState,
+  McpStatus,
+  ProjectInfo,
+  Settings,
+  SdkSummary,
+  WindowState,
+} from '../shared/types';
 
 function invoke<T>(channel: string, ...args: unknown[]): Promise<T> {
   return ipcRenderer.invoke(channel, ...args) as Promise<T>;
@@ -69,6 +78,12 @@ const bridge: Bridge = {
     check: (force) => invoke('bigenv:updates:check', force === true),
     download: () => invoke<string>('bigenv:updates:download'),
     openPage: () => invoke('bigenv:updates:openPage'),
+  },
+  mcp: {
+    status: () => invoke<McpStatus>('bigenv:mcp:status'),
+    setEnabled: (enabled) => invoke<McpStatus>('bigenv:mcp:setEnabled', enabled),
+    setPort: (port) => invoke<McpStatus>('bigenv:mcp:setPort', port),
+    rotateToken: () => invoke<McpStatus>('bigenv:mcp:rotateToken'),
   },
   health: {
     scan: () => invoke('bigenv:health:scan'),

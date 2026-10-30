@@ -35,6 +35,9 @@ function sanitize(input: Partial<Settings>, base: Settings): Settings {
       return true;
     });
   merged.theme = merged.theme === 'light' || merged.theme === 'dark' ? merged.theme : 'system';
+  merged.mcpEnabled = merged.mcpEnabled === true;
+  merged.mcpPort = Math.min(65535, Math.max(1024, Math.round(Number(merged.mcpPort) || 47831)));
+  merged.mcpToken = typeof merged.mcpToken === 'string' ? merged.mcpToken.trim() : '';
   return merged;
 }
 

@@ -106,35 +106,18 @@ export function registerIpc(runtime: AppRuntime): void {
   });
   ipcMain.handle('bigenv:env:setPathMode', async (_event, mode: unknown) => {
     if (mode !== 'off' && mode !== 'user' && mode !== 'machine') throw new Error('非法的 PATH 模式');
-    const previous = getSettings().pathMode;
     // Record the intent before writing: the elevated helper re-reads settings and refuses to
     // act when the mode changed meanwhile, so this is what makes UAC approval meaningful.
     broadcast('bigenv:settings', await updateSettings({ pathMode: mode }));
     try {
-      // Leaving machine mode needs elevation too, because HKLM cannot be edited otherwise.
-      if (previous === 'machine' && mode !== 'machine') {
-        await runtime.applyMachinePathElevated('strip');
-      }
-      try {
-        await runtime.env.setPathMode(mode);
-      } catch (error) {
-        // HKLM needs real elevation; the click itself is the user's intent, so raise UAC now
-        // instead of bouncing a permission error back to the page.
-        const message = error instanceof Error ? error.message : String(error);
-        if (mode === 'machine' && /管理员权限/.test(message)) {
-          await runtime.applyMachinePathElevated('apply');
-        } else {
-          throw error;
-        }
-      }
+      const info = await runtime.setPathMode(mode);
+      broadcast('bigenv:settings', getSettings());
+      return info;
     } catch (error) {
-      // Nothing was published: restore both the stored mode and the previous scope.
-      broadcast('bigenv:settings', await updateSettings({ pathMode: previous }));
-      await runtime.env.setPathMode(previous).catch(() => undefined);
+      // Nothing was published: runtime.setPathMode restored the stored mode and scope.
+      broadcast('bigenv:settings', getSettings());
       throw error;
     }
-    broadcast('bigenv:settings', await runtime.applySettings({ pathMode: mode }));
-    return await runtime.env.info();
   });
 
   ipcMain.handle('bigenv:env:setPathSdks', async (_event, sdks: unknown) => {
@@ -217,6 +200,22 @@ export function registerIpc(runtime: AppRuntime): void {
   ipcMain.handle('bigenv:updates:check', async (_event, force: unknown) => await runtime.updates.check(force === true));
   ipcMain.handle('bigenv:updates:download', async () => (await runtime.updates.download()).path);
   ipcMain.handle('bigenv:updates:openPage', async () => await runtime.updates.openPage());
+
+  ipcMain.handle('bigenv:mcp:status', async () => runtime.mcp.status());
+  ipcMain.handle('bigenv:mcp:setEnabled', async (_event, enabled: unknown) => {
+    if (typeof enabled !== 'boolean') throw new Error('非法的开关值');
+    const settings = await runtime.applySettings({ mcpEnabled: enabled });
+    broadcast('bigenv:settings', settings);
+    return runtime.mcp.status();
+  });
+  ipcMain.handle('bigenv:mcp:setPort', async (_event, port: unknown) => {
+    const value = Math.round(Number(port));
+    if (!Number.isFinite(value) || value < 1024 || value > 65535) throw new Error('端口需要在 1024-65535 之间');
+    const settings = await runtime.applySettings({ mcpPort: value });
+    broadcast('bigenv:settings', settings);
+    return runtime.mcp.status();
+  });
+  ipcMain.handle('bigenv:mcp:rotateToken', async () => await runtime.mcp.rotateToken());
 
   ipcMain.handle('bigenv:health:scan', async () => await runtime.health.scan());
   ipcMain.handle('bigenv:health:clean', async (_event, options: unknown) => {

@@ -85,6 +85,9 @@ export function defaultSettings(): Settings {
     pathSdks: [],
     projects: [],
     theme: 'system',
+    mcpEnabled: false,
+    mcpPort: 47831,
+    mcpToken: '',
   };
 }
 

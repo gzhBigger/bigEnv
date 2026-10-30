@@ -30,6 +30,7 @@ src/
     projects.ts    多项目登记与锁文件读写
     health.ts      孤儿目录、失效链接、缓存统计
     updates.ts     GitHub Releases 检查（API → HTML → package.json 三级回退）
+    mcp.ts         本机 MCP 端点（Streamable HTTP、Bearer 令牌、bigenv_* 工具）
   preload/       contextBridge，暴露 window.bigenv
   renderer/      React 19 + zustand；lib/mock.ts 提供浏览器预览用的假 bridge
   cli/           bigenv CLI（不依赖 electron，打包后进 resources/cli.cjs）
@@ -62,6 +63,7 @@ pnpm verify-notes            # 笔记树与格式校验，提交前必跑
 - **不要在主进程里 `shell: true` 拼字符串**：统一用 `util.runCommand`，它处理 Windows 的 `.cmd` 与超时。
 - **CLI 不 import electron**：`src/cli/index.ts` 直接读磁盘与 `settings.json`，这样 `resources/cli.cjs` 能在任何 Node 环境跑。
 - **渲染进程不直接调 `window.bigenv`**：一律经 `lib/bridge.ts`，这样浏览器里能落到 mock。
+- **MCP 工具统一 `bigenv_*`**（见 `src/main/mcp.ts`）：只读工具标 `readOnlyHint`，写操作必须复用主进程现有服务（`jobs` / `registry` / `env` / `projects` / `health`）并广播对应事件，不要另写一套逻辑；新增工具时同步 `TOOL_COUNT`、README 工具表与笔记。
 - **不要擅自改用户配置**：调试时打开过的 PATH 注入 / profile 开关，结束时必须恢复原状；改注册表前先备份 `%TEMP%`。
 - **界面文案用中文**，代码与注释用英文。
 

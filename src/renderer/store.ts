@@ -3,6 +3,7 @@ import type {
   HealthReport,
   InstallRecord,
   JobState,
+  McpStatus,
   PathMode,
   ProjectInfo,
   SdkSummary,
@@ -69,6 +70,9 @@ interface AppState {
   update: UpdateInfo | null;
   checkingUpdate: boolean;
   downloadingUpdate: boolean;
+  /** Local MCP endpoint shown on the settings page. */
+  mcp: McpStatus | null;
+  mcpBusy: boolean;
 
   init(): Promise<void>;
   setPage(page: PageKey): void;
@@ -96,6 +100,10 @@ interface AppState {
   setTheme(mode: ThemeMode): Promise<void>;
   checkUpdate(force?: boolean): Promise<void>;
   downloadUpdate(): Promise<void>;
+  loadMcp(): Promise<void>;
+  setMcpEnabled(enabled: boolean): Promise<void>;
+  setMcpPort(port: number): Promise<void>;
+  rotateMcpToken(): Promise<void>;
   scanHealth(): Promise<void>;
   cleanHealth(options: { cache?: boolean; orphans?: boolean }): Promise<void>;
   notify(text: string, kind?: 'ok' | 'err'): void;
@@ -125,6 +133,8 @@ export const useApp = create<AppState>((set, get) => ({
   update: null,
   checkingUpdate: false,
   downloadingUpdate: false,
+  mcp: null,
+  mcpBusy: false,
 
   async init() {
     bridge.events.onJob((job) => {
@@ -177,6 +187,7 @@ export const useApp = create<AppState>((set, get) => ({
     void get().loadProjects();
     // Silent startup check; the cached answer avoids hitting GitHub on every launch.
     void get().checkUpdate();
+    void get().loadMcp();
   },
 
   setPage(page) {
@@ -446,6 +457,59 @@ export const useApp = create<AppState>((set, get) => ({
       get().notify(`下载失败：${errorText(error)}`, 'err');
     } finally {
       set({ downloadingUpdate: false });
+    }
+  },
+
+  async loadMcp() {
+    try {
+      set({ mcp: await bridge.mcp.status() });
+    } catch {
+      // The endpoint is optional; a failure here should not block the settings page.
+    }
+  },
+
+  async setMcpEnabled(enabled) {
+    if (get().mcpBusy) return;
+    set({ mcpBusy: true });
+    try {
+      const status = await bridge.mcp.setEnabled(enabled);
+      set({ mcp: status, settings: await bridge.settings.get() });
+      if (enabled && status.running) get().notify(`MCP 已启动：${status.url}`);
+      else if (enabled && status.error) get().notify(status.error, 'err');
+      else if (!enabled) get().notify('MCP 服务已关闭');
+    } catch (error) {
+      get().notify(`MCP 启动失败：${errorText(error)}`, 'err');
+    } finally {
+      set({ mcpBusy: false });
+    }
+  },
+
+  async setMcpPort(port) {
+    if (get().mcpBusy) return;
+    set({ mcpBusy: true });
+    try {
+      const status = await bridge.mcp.setPort(port);
+      set({ mcp: status, settings: await bridge.settings.get() });
+      if (status.error) get().notify(status.error, 'err');
+      else get().notify(`MCP 端口已改为 ${status.port}`);
+    } catch (error) {
+      get().notify(`端口修改失败：${errorText(error)}`, 'err');
+    } finally {
+      set({ mcpBusy: false });
+    }
+  },
+
+  async rotateMcpToken() {
+    if (get().mcpBusy) return;
+    set({ mcpBusy: true });
+    try {
+      const status = await bridge.mcp.rotateToken();
+      set({ mcp: status, settings: await bridge.settings.get() });
+      get().notify('访问令牌已重新生成，记得更新 AI 客户端配置');
+    } catch (error) {
+      get().notify(`令牌生成失败：${errorText(error)}`, 'err');
+    } finally {
+      set({ mcpBusy: false });
     }
   },
 

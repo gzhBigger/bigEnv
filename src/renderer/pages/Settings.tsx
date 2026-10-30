@@ -1,6 +1,6 @@
 import type { JSX } from 'react';
 import { useEffect, useState } from 'react';
-import { Check, Download, FolderSearch, RefreshCw, RotateCw } from 'lucide-react';
+import { Check, Copy, Download, Eye, EyeOff, FolderSearch, KeyRound, RefreshCw, RotateCw } from 'lucide-react';
 import { bridge } from '../lib/bridge';
 import { useApp } from '../store';
 import type { MirrorMode, Settings as SettingsShape } from '../../shared/types';
@@ -28,11 +28,23 @@ export function Settings(): JSX.Element {
   const downloadingUpdate = useApp((state) => state.downloadingUpdate);
   const checkUpdate = useApp((state) => state.checkUpdate);
   const downloadUpdate = useApp((state) => state.downloadUpdate);
+  const mcp = useApp((state) => state.mcp);
+  const mcpBusy = useApp((state) => state.mcpBusy);
+  const setMcpEnabled = useApp((state) => state.setMcpEnabled);
+  const setMcpPort = useApp((state) => state.setMcpPort);
+  const rotateMcpToken = useApp((state) => state.rotateMcpToken);
+  const notify = useApp((state) => state.notify);
   const [draft, setDraft] = useState<SettingsShape | null>(settings);
+  const [showToken, setShowToken] = useState(false);
+  const [portDraft, setPortDraft] = useState(String(settings?.mcpPort ?? 47831));
 
   useEffect(() => {
     if (settings) setDraft(settings);
   }, [settings]);
+
+  useEffect(() => {
+    if (mcp) setPortDraft(String(mcp.port));
+  }, [mcp?.port]);
 
   if (!draft) return <div className="empty">正在读取设置…</div>;
 
@@ -55,6 +67,33 @@ export function Settings(): JSX.Element {
   };
 
   const updatesBusy = checkingUpdate || downloadingUpdate;
+
+  const token = mcp?.token ?? '';
+  const maskedToken = token ? `${token.slice(0, 6)}${'•'.repeat(18)}${token.slice(-4)}` : '启用后自动生成';
+  const clientSnippet = JSON.stringify(
+    {
+      mcpServers: {
+        bigenv: {
+          type: 'http',
+          url: mcp?.url ?? `http://127.0.0.1:${settings?.mcpPort ?? 47831}/mcp`,
+          headers: { Authorization: `Bearer ${token || '<token>'}` },
+        },
+      },
+    },
+    null,
+    2,
+  );
+  // 卡片里默认不把完整令牌画出来，避免截图/分享时泄露；复制仍用真实值。
+  const displayedSnippet = showToken || !token ? clientSnippet : clientSnippet.replace(token, '•'.repeat(32));
+
+  const copy = async (text: string, label: string): Promise<void> => {
+    try {
+      await navigator.clipboard.writeText(text);
+      notify(`${label}已复制`);
+    } catch {
+      notify(`无法写入剪贴板，请手动选择复制`, 'err');
+    }
+  };
 
   return (
     <>
@@ -153,6 +192,96 @@ export function Settings(): JSX.Element {
                 onClick={() => void saveSettings({ showUnsupported: !settings?.showUnsupported })}
               />
             </div>
+          </div>
+
+          <div className="card" style={{ marginBottom: 14 }}>
+            <div className="card-head">
+              <h2>AI 接入（MCP）</h2>
+              <span className={`tag ${mcp?.running ? 'green' : mcp?.enabled ? 'amber' : ''}`}>
+                {mcp?.running ? '运行中' : mcp?.enabled ? '未启动' : '已关闭'}
+              </span>
+            </div>
+            <div className="spread" style={{ padding: '6px 0' }}>
+              <div>
+                <div>允许本机 AI 客户端通过 MCP 操作 bigEnv</div>
+                <div className="desc">只监听 127.0.0.1，访问需要令牌；安装、切换、清理都会真实执行。</div>
+              </div>
+              <button
+                type="button"
+                className={`switch ${mcp?.enabled ? 'on' : ''}`}
+                aria-label="启用 MCP 服务"
+                disabled={mcpBusy}
+                onClick={() => void setMcpEnabled(!mcp?.enabled)}
+              />
+            </div>
+
+            {mcp?.enabled ? (
+              <>
+                <div className="field">
+                  <label>端点</label>
+                  <div className="row">
+                    <input className="input mono" style={{ flex: 1 }} readOnly value={mcp.url} />
+                    <button type="button" className="btn" aria-label="复制端点" onClick={() => void copy(mcp.url, '端点')}>
+                      <Copy size={13} />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="field">
+                  <label>访问令牌</label>
+                  <div className="row">
+                    <input className="input mono" style={{ flex: 1 }} readOnly value={showToken ? token : maskedToken} />
+                    <button type="button" className="btn" aria-label="显示或隐藏令牌" onClick={() => setShowToken((value) => !value)}>
+                      {showToken ? <EyeOff size={13} /> : <Eye size={13} />}
+                    </button>
+                    <button type="button" className="btn" aria-label="复制令牌" onClick={() => void copy(token, '令牌')}>
+                      <Copy size={13} />
+                    </button>
+                    <button type="button" className="btn ghost" disabled={mcpBusy} onClick={() => void rotateMcpToken()}>
+                      <KeyRound size={13} /> 重新生成
+                    </button>
+                  </div>
+                  <div className="desc">重新生成后旧令牌立即失效，需要同步更新 AI 客户端配置。</div>
+                </div>
+
+                <div className="field">
+                  <label>监听端口</label>
+                  <div className="row">
+                    <input
+                      className="input"
+                      type="number"
+                      min={1024}
+                      max={65535}
+                      style={{ width: 110 }}
+                      value={portDraft}
+                      onChange={(event) => setPortDraft(event.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="btn"
+                      disabled={mcpBusy || Number(portDraft) === mcp.port}
+                      onClick={() => void setMcpPort(Number(portDraft))}
+                    >
+                      应用
+                    </button>
+                    {mcp.error ? <span className="tag red">{mcp.error}</span> : null}
+                  </div>
+                </div>
+
+                <div className="field">
+                  <label>客户端配置</label>
+                  <pre className="code-block mono">{displayedSnippet}</pre>
+                  <div className="row">
+                    <button type="button" className="btn" onClick={() => void copy(clientSnippet, '配置')}>
+                      <Copy size={13} /> 复制 JSON
+                    </button>
+                    <span className="hint-text">共 {mcp.toolCount} 个工具：列目录、装版本、切 current、写项目锁、清缓存等。</span>
+                  </div>
+                </div>
+
+                <div className="hint-text">令牌等同于本机安装目录的写权限，不要贴到公开仓库；用完可以直接关掉这个开关。</div>
+              </>
+            ) : null}
           </div>
 
           <div className="card" style={{ marginBottom: 14 }}>

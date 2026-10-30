@@ -3,6 +3,7 @@ import type {
   HealthReport,
   InstallRecord,
   JobState,
+  McpStatus,
   ProjectInfo,
   SdkSummary,
   Settings,
@@ -248,6 +249,9 @@ const DEFAULT_SETTINGS: Settings = {
   pathSdks: ['node', 'go'],
   projects: ['D:\\workspace\\demo-shop', 'D:\\workspace\\api-server'],
   theme: 'system',
+  mcpEnabled: false,
+  mcpPort: 47831,
+  mcpToken: 'mock-token-0123456789abcdef',
 };
 
 function versionsOf(seed: Seed, installed: InstallRecord[]): VersionOption[] {
@@ -285,6 +289,14 @@ function installRecord(sdk: string, version: string, current: boolean): InstallR
 
 export function createMockBridge(): Bridge {
   let settings: Settings = { ...DEFAULT_SETTINGS };
+  const mcpStatus = (): McpStatus => ({
+    enabled: settings.mcpEnabled,
+    running: settings.mcpEnabled,
+    port: settings.mcpPort,
+    url: `http://127.0.0.1:${settings.mcpPort}/mcp`,
+    token: settings.mcpToken,
+    toolCount: 20,
+  });
   let installed: InstallRecord[] = [
     installRecord('node', '22.17.0', true),
     installRecord('go', '1.24.5', true),
@@ -550,6 +562,24 @@ export function createMockBridge(): Bridge {
       }),
       download: async () => 'D:\\demo\\bigEnv-setup.exe',
       openPage: async () => undefined,
+    },
+    mcp: {
+      status: async () => mcpStatus(),
+      setEnabled: async (enabled) => {
+        settings = { ...settings, mcpEnabled: enabled };
+        await delay(160);
+        return mcpStatus();
+      },
+      setPort: async (port) => {
+        settings = { ...settings, mcpPort: port };
+        await delay(160);
+        return mcpStatus();
+      },
+      rotateToken: async () => {
+        settings = { ...settings, mcpToken: `mock-${Math.random().toString(16).slice(2, 14)}` };
+        await delay(120);
+        return mcpStatus();
+      },
     },
     health: {
       scan: async () => {
